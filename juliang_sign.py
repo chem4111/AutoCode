@@ -45,16 +45,24 @@ def sign_in(email, password):
         login_response = session.post(login_url, headers=headers, data=login_data)
         login_response.raise_for_status()
         
+        # 判断登录是否成功
+        if login_response.status_code == 200 and "登陆成功" in login_response.text:
+            login_message = f"账号 {email} 登录成功"
+        else:
+            login_message = f"账号 {email} 登录失败"
+        
         # 签到
         checkin_response = session.post(checkin_url, headers=headers)
         checkin_response.raise_for_status()
         
         result = checkin_response.json()
-        return result.get("msg", "签到失败，未获取到消息")
+        checkin_message = result.get("msg", "签到失败，未获取到消息")
+        
+        return f"{login_message} - {checkin_message}"
     
     except requests.RequestException as e:
         print(f"请求失败: {e}")
-        return "签到失败，请检查账号配置。"
+        return f"账号 {email} 签到失败，请检查账号配置。"
 
 def main():
     accounts = get_env_vars()
