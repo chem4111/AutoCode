@@ -1,73 +1,46 @@
 import requests
 import os
+import sys  # 添加sys库用于退出程序
 
-#export ikuuu='邮箱&密码'      多号#号隔开
-
-#export REMARKS_1="账号1备注"
-#export REMARKS_2="账号2备注"
-#export REMARKS_3="账号3备注"
-
-#pushplush 通知，单人不用填TOPIC
-#https://www.pushplus.plus/push1.html
-#export TOKEN="你的token"
-#export TOPIC="你的群组编号"
-
+# export ikuuu='邮箱1&密码1&备注1#邮箱2&密码2&备注2#邮箱3&密码3&备注3'
 
 def main():
-    r = 1
-    oy = ql_env()
-    print("共找到" + str(len(oy)) + "个账号")
-    # 获取环境变量的值
-    remarks = {
-        1: os.getenv("REMARKS_1"),
-        2: os.getenv("REMARKS_2"),
-        3: os.getenv("REMARKS_3")
-    }
-    all_messages = []  # 创建一个列表，用于存储所有的消息
-    for i in oy:
-        remark = remarks.get(r, str(r))  # 获取账号的备注，如果没有对应备注，则使用默认值
-        all_messages.append(f"{remark}的账号：")  # 将消息添加到列表中
-        print(f"{remark}的账号：")
-        email = i.split('&')[0]
-        passwd = i.split('&')[1]
-        sign_in(email, passwd,all_messages)
-        r += 1
-    send_notice("\n".join(all_messages))  # 将所有消息组合成一个字符串并发送
-def sign_in(email, passwd,all_messages):
-    try:
-        body = {"email" : email,"passwd" : passwd,}
-        headers = {'user-agent':'Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1'}
-        resp = requests.session()
-        resp.post(f'https://ikuuu.pw/auth/login', headers=headers, data=body)
-        ss = resp.post(f'https://ikuuu.pw/user/checkin').json()
-        #print(ss)
-        if 'msg' in ss:
-            all_messages.append(ss['msg'])  # 将消息添加到列表中
-            print(ss['msg'])
-    except:
-        print('请检查帐号配置是否错误')
-def ql_env():
-    if "ikuuu" in os.environ:
-        token_list = os.environ['ikuuu'].split('#')
-        if len(token_list) > 0:
-            return token_list
-        else:
-            print("ikuuu变量未启用")
-            sys.exit(1)
+    accounts = get_accounts()  # 获取所有账号信息
+    print(f"共找到{len(accounts)}个账号")
+
+    for account in accounts:
+        email, passwd, remark = account.split('&')  # 分割出邮箱、密码和备注
+        message = sign_in(email, passwd)  # 登录并签到
+        print(f"{remark}的账号：{message}")  # 打印签到结果
+
+def get_accounts():
+    """
+    从环境变量中获取账号信息
+    """
+    ikuuu = os.getenv("ikuuu")
+    if ikuuu:
+        return ikuuu.split('#')  # 使用#分隔多个账号信息
     else:
         print("未添加ikuuu变量")
-        sys.exit(0)
+        sys.exit(1)  # 若未找到环境变量，则退出程序
 
-def send_notice(content):    # 通知消息发送函数
-    # 获取环境变量的值
-    token = os.getenv("TOKEN")
-    topic = os.getenv("TOPIC")
-    title = "iKUUU签到"
-    url = f"http://www.pushplus.plus/send?token={token}&title={title}&content={content}&template=html"   #单人推送
-    #url = f"http://www.pushplus.plus/send?token={token}&title={title}&content={content}&template=html&topic={topic}"  #群组推送
-    response = requests.request("GET", url)
-    #print(response.text)
-
+def sign_in(email, passwd):
+    """
+    登录并签到
+    """
+    try:
+        body = {"email": email, "passwd": passwd}
+        headers = {
+            'user-agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1'
+        }
+        session = requests.session()
+        # 发送登录请求
+        session.post('https://ikuuu.pw/auth/login', headers=headers, data=body)
+        # 发送签到请求
+        response = session.post('https://ikuuu.pw/user/checkin').json()
+        return response.get('msg', '签到失败')  # 返回签到结果
+    except Exception as e:
+        return f'请检查账号配置是否错误: {e}'  # 捕获异常并返回错误信息
 
 if __name__ == '__main__':
     main()
