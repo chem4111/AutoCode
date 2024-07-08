@@ -3,6 +3,9 @@ import os
 import sys  # 添加sys库用于退出程序
 
 # export ikuuu='邮箱1&密码1&备注1#邮箱2&密码2&备注2#邮箱3&密码3&备注3'
+#你需要在环境变量中设置 PUSH_PLUS_TOKEN 和 PUSH_PLUS_USER。
+#PUSH_PLUS_TOKEN：你的 Push Plus 个人令牌，用于一对一推送。
+#PUSH_PLUS_USER：你的 Push Plus 群组编码，如果没有则可以留空。
 
 def main():
     accounts = get_accounts()  # 获取所有账号信息
@@ -12,6 +15,7 @@ def main():
         email, passwd, remark = account.split('&')  # 分割出邮箱、密码和备注
         message = sign_in(email, passwd)  # 登录并签到
         print(f"{remark}的账号：{message}")  # 打印签到结果
+        send_notification(remark, message)  # 发送通知
 
 def get_accounts():
     """
@@ -41,6 +45,35 @@ def sign_in(email, passwd):
         return response.get('msg', '签到失败')  # 返回签到结果
     except Exception as e:
         return f'请检查账号配置是否错误: {e}'  # 捕获异常并返回错误信息
+
+def send_notification(remark, message):
+    """
+    发送通知
+    """
+    try:
+        push_plus_token = os.getenv("PUSH_PLUS_TOKEN")
+        push_plus_user = os.getenv("PUSH_PLUS_USER")
+        if not push_plus_token:
+            print("未添加Push Plus的TOKEN")
+            return
+        
+        url = "http://www.pushplus.plus/send"
+        data = {
+            "token": push_plus_token,
+            "title": f"{remark}的账号签到结果",
+            "content": message,
+            "topic": push_plus_user if push_plus_user else ""
+        }
+        headers = {
+            'Content-Type': 'application/json'
+        }
+        response = requests.post(url, json=data, headers=headers)
+        if response.status_code == 200:
+            print(f"{remark}的账号通知发送成功")
+        else:
+            print(f"{remark}的账号通知发送失败，状态码：{response.status_code}")
+    except Exception as e:
+        print(f"{remark}的账号通知发送异常: {e}")
 
 if __name__ == '__main__':
     main()
