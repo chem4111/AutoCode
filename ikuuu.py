@@ -39,9 +39,9 @@ def sign_in(email, passwd):
         }
         session = requests.session()
         # 发送登录请求
-        session.post('https://ikuuu.pw/auth/login', headers=headers, data=body)
+        session.post('https://ikuuu.one/auth/login', headers=headers, data=body)
         # 发送签到请求
-        response = session.post('https://ikuuu.pw/user/checkin').json()
+        response = session.post('https://ikuuu.one/user/checkin').json()
         return response.get('msg', '签到失败')  # 返回签到结果
     except Exception as e:
         return f'请检查账号配置是否错误: {e}'  # 捕获异常并返回错误信息
