@@ -39,8 +39,8 @@ def calculate_probabilities(kjList):
 
 def send_notice(content):
     # 获取环境变量的值
-    token = os.getenv("TOKEN")
-    topic = os.getenv("TOPIC")
+    token = os.getenv("PUSH_PLUS_TOKEN")
+    topic = os.getenv("PUSH_PLUS_TOPIC")
     title = "双色球预测"
     
     # 构造请求的 URL
