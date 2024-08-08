@@ -2,19 +2,18 @@ import requests
 import os
 import sys  # 添加sys库用于退出程序
 
-# export ikuuu='邮箱1&密码1&备注1#邮箱2&密码2&备注2#邮箱3&密码3&备注3'
-#WP_APP_TOKEN_ONE: Wxpusher 的 APP_TOKEN
-#WXPUSHER_UIDS: 接收通知的用户 UID 列表，多个 UID 用逗号分隔
+# export ikuuu='邮箱1&密码1&UID1&备注1#邮箱2&密码2&UID2&备注2#邮箱3&密码3&UID3&备注3'
+# WP_APP_TOKEN_ONE: Wxpusher 的 APP_TOKEN
 
 def main():
     accounts = get_accounts()  # 获取所有账号信息
     print(f"共找到{len(accounts)}个账号")
 
     for account in accounts:
-        email, passwd, remark = account.split('&')  # 分割出邮箱、密码和备注
+        email, passwd, uid, remark = account.split('&')  # 分割出邮箱、密码、UID和备注
         message = sign_in(email, passwd)  # 登录并签到
         print(f"{remark}的账号：{message}")  # 打印签到结果
-        send_notification(remark, message)  # 发送通知
+        send_notification(remark, message, uid)  # 发送通知
 
 def get_accounts():
     """
@@ -45,26 +44,23 @@ def sign_in(email, passwd):
     except Exception as e:
         return f'请检查账号配置是否错误: {e}'  # 捕获异常并返回错误信息
 
-def send_notification(remark, message):
+def send_notification(remark, message, uid):
     """
     发送微信通知
     """
     try:
         app_token = os.getenv("WP_APP_TOKEN_ONE")
-        uids = os.getenv("WXPUSHER_UIDS")
 
-        if not app_token or not uids:
-            print("未添加Wxpusher的APP_TOKEN或UIDS")
+        if not app_token:
+            print("未添加Wxpusher的APP_TOKEN")
             return
-
-        uid_list = uids.split(',')
 
         url = "https://wxpusher.zjiecode.com/api/send/message"
         data = {
             "appToken": app_token,
             "content": f"{remark}的账号签到结果：{message}",
             "contentType": 1,
-            "uids": uid_list
+            "uids": [uid]  # 使用单个UID
         }
         headers = {
             'Content-Type': 'application/json'
