@@ -11,7 +11,7 @@ PUSH_TOKEN = "your_push_token"  # 替换成你的 wxpush token
 def get_public_ip():
     try:
         # 获取公网 IP
-        response = requests.get('https://api.ipify.org?format=json')
+        response = requests.get('https://checkip.amazonaws.com')
         data = response.json()
         return data['ip']
     except Exception as e:
