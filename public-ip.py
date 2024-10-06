@@ -6,7 +6,7 @@ IP_FILE_PATH = 'public_ip.txt'
 
 # 直接设置 wxpush API 地址和 UID，PUSH_TOKEN 仍然从环境变量中获取
 WXPUSH_URL = "https://wxpusher.zjiecode.com/api/send/message"  # 固定 wxpush API 地址
-PUSH_TOKEN = os.getenv("WP_APP_TOKEN_ONE")  # 仍然从环境变量中获取 wxpush token
+PUSH_TOKEN = os.getenv("WP_APP_TOKEN_ONE")  # 从环境变量中获取 wxpush token
 UID = "YOUR_UID_HERE"  # 替换成实际的 UID
 
 def get_public_ip():
