@@ -1,9 +1,6 @@
 import requests
 import os
-import sys  # 添加sys库用于退出程序
-
-# export ikuuu='邮箱1&密码1&UID1&备注1#邮箱2&密码2&UID2&备注2#邮箱3&密码3&UID3&备注3'
-# WP_APP_TOKEN_ONE: Wxpusher 的 APP_TOKEN
+import sys
 
 def main():
     accounts = get_accounts()  # 获取所有账号信息
@@ -36,11 +33,16 @@ def sign_in(email, passwd):
             'user-agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1'
         }
         session = requests.session()
-        # 发送登录请求
-        session.post('https://ikuuu.one/auth/login', headers=headers, data=body)
-        # 发送签到请求
-        response = session.post('https://ikuuu.one/user/checkin').json()
-        return response.get('msg', '签到失败')  # 返回签到结果
+        
+        # 发送登录请求，禁用 SSL 验证
+        login_response = session.post('https://ikuuu.one/auth/login', headers=headers, data=body, verify=False)
+        # 检查登录请求的状态码
+        if login_response.status_code != 200:
+            return f"登录失败: 状态码 {login_response.status_code}"
+
+        # 发送签到请求，禁用 SSL 验证
+        checkin_response = session.post('https://ikuuu.one/user/checkin', verify=False).json()
+        return checkin_response.get('msg', '签到失败')  # 返回签到结果
     except Exception as e:
         return f'请检查账号配置是否错误: {e}'  # 捕获异常并返回错误信息
 
