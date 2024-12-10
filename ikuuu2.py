@@ -1,6 +1,10 @@
 import requests
 import os
 import sys
+from urllib3.exceptions import InsecureRequestWarning
+
+# 禁用 InsecureRequestWarning 警告
+requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 def main():
     accounts = get_accounts()  # 获取所有账号信息
