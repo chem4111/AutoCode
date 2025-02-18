@@ -61,15 +61,15 @@ class PredictionModel:
     def _calculate_red_probability(self):
         # 融合区间权重和冷热分析[[2][5][6]()
         counter = Counter(n for d in self.history for n in d.red)
-        period_data = [d for d in self.history if d.date。year == datetime.当前()。year - 1]
+        period_data = [d for d in self.history if d.date.year == datetime.now().year - 1]
         period_exclude = set(n for d in period_data for n in d.red)  # [1]()
 
         probs = {}
-        for n in range(1， 34):
+        for n in range(1, 34):
             interval = 1 if n <= 11 else 2 if n <= 22 else 3
             base = counter[n] / len(self.history) if self.history else 1 / 33
             weight = self.interval_weights['红球'][interval]
-            if n in period_exclude 和 self.exclude_rules['same_period']:
+            if n in period_exclude and self.exclude_rules['same_period']:
                 weight *= 0.2  # 降低去年同期号概率[1]()
             probs[n] = base * weight
         return self._apply_exclusion_rules(probs)
@@ -80,19 +80,19 @@ class PredictionModel:
         recent_blue = [d.blue for d in self.history[:self.exclude_rules['blue_recent']]]
 
         probs = {}
-        for n in range(1， 17):
+        for n in range(1, 17):
             interval = 1 if n <= 8 else 2
             base = counter[n] / len(self.history) if self.history else 1 / 16
             weight = self.interval_weights['蓝球'][interval]
-            if n in recent_blue 和 self.exclude_rules['blue_recent']:
+            if n in recent_blue and self.exclude_rules['blue_recent']:
                 weight *= 0.3  # 降低近期出现过的蓝球概率[2]()
             probs[n] = base * weight
         return probs
 
     # 高级排除策略
     def _apply_exclusion_rules(self, probs):
-        if self.exclude_rules['red_head_tail'] 和 self.history:
-            last_sum = sum(self.history[0]。red)
+        if self.exclude_rules['red_head_tail'] and self.history:
+            last_sum = sum(self.history[0].red)
             head, tail = last_sum // 100 % 10, last_sum % 10  # [1]()
             for n in probs:
                 if n in (head, tail):
@@ -101,14 +101,13 @@ class PredictionModel:
 
     # 选择算法
     def _select_red(self, probs):
-        numbers = []
+        numbers = set()  # 使用 set 避免重复
         while len(numbers) < 6:
             candidates = random.choices(list(probs.keys()), weights=list(probs.values()), k=10)
             for n in candidates:
-                if n not in numbers:
-                    numbers.append(n)
-                    if len(numbers) == 6:
-                        break
+                numbers.add(n)
+                if len(numbers) == 6:
+                    break
         return sorted(numbers)
 
     def _select_blue(self, probs):
@@ -119,9 +118,9 @@ class PredictionModel:
 def fetch_new_data():
     url = "http://www.cwl.gov.cn/cwl_admin/front/cwlkj/search/kjxx/findDrawNotice"
     params = {
-        "name": "ssq"，
-        "pageNo": 1，
-        "pageSize": 30，
+        "name": "ssq",
+        "pageNo": 1,
+        "pageSize": 30,
         "systemType": "PC"
     }
     try:
@@ -129,9 +128,9 @@ def fetch_new_data():
         res.raise_for_status()
         new_data = [
             SsqData(
-                code=item['code']，
-                date=item['date']，
-                red=item['red']，
+                code=item['code'],
+                date=item['date'],
+                red=item['red'],
                 blue=item['blue']
             ) for item in res.json()['result']
         ]
@@ -143,7 +142,7 @@ def fetch_new_data():
 
 # 预测验证与优化
 def check_prediction(model):
-    if not model.history 或 not predict_file.exists():
+    if not model.history or not predict_file.exists():
         return
 
     with open(predict_file, 'r') as f:
@@ -157,6 +156,23 @@ def check_prediction(model):
     adjustment = 1 + red_match * 0.1 + blue_match * 0.2
     for k in model.interval_weights['红球']:
         model.interval_weights['红球'][k] *= adjustment
+
+
+# 发送通知
+def send_notice(content, token, topic):
+    url = "http://pushplus.hxtrip.com/send"
+    payload = {
+        "token": token,
+        "title": topic,
+        "content": content,
+        "template": "html"  # 根据需要设置不同的通知模板
+    }
+    try:
+        res = requests.post(url, data=payload)
+        res.raise_for_status()
+        print("通知发送成功")
+    except Exception as e:
+        print(f"通知发送失败: {e}")
 
 
 # 主流程
@@ -184,4 +200,4 @@ if __name__ == "__main__":
         content += f"第{i}组：红球{' '。join(map(str, pred['红球']))} | 蓝球{pred['蓝球']}\n"
 
     # 发送通知（需配置PushPlus）
-    # send_notice(content, token, topic)
+    send_notice(content, token, topic)
