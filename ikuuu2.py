@@ -2,6 +2,11 @@ import requests
 import os
 import sys
 from urllib3.exceptions import InsecureRequestWarning
+/*
+export ikuuu="email1@example.com&password1&uid1&备注1#email2@example.com&password2&uid2&备注2"
+export WP_APP_TOKEN_ONE="AT_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"    
+*/
+
 
 # 禁用 InsecureRequestWarning 警告
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
