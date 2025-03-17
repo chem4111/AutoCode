@@ -1,121 +1,22 @@
 import requests
-import json
+import os
 import random
-from collections import Counter, defaultdict
-from datetime import datetime, timedelta
-from pathlib import Path
+from dataclasses import dataclass
+from collections import Counter
+from datetime import datetime
 
-# 配置参数
-token = "your_pushplus_token"
-topic = "your_pushplus_topic"
-data_file = Path("ssq_data.json")
-predict_file = Path("predictions.json")
+# 配置信息（建议通过环境变量设置）
+PUSH_PLUS_TOKEN = os.getenv("PUSH_PLUS_TOKEN", "your_token")
+PUSH_PLUS_TOPIC = os.getenv("PUSH_PLUS_TOPIC", "your_topic")
 
+@dataclass
+class LotteryResult:
+    code: str
+    red_balls: list[int]
+    blue_ball: int
 
-class SsqData:
-    def __init__(self, code, date, red, blue):
-        self.code = code
-        self.date = datetime.strptime(date, '%Y-%m-%d')
-        self.red = list(map(int, red.split(',')))
-        self.blue = int(blue)
-
-
-class PredictionModel:
-    def __init__(self):
-        self.history = self.load_history()
-        self.interval_weights = {
-            '红球': {1: 0.4, 2: 0.35, 3: 0.25},  # 基于[[1][6]()的三区分布
-            '蓝球': {1: 0.6, 2: 0.4}  # 大小区划分
-        }
-        self.exclude_rules = {
-            'red_head_tail': True,  # 排除上期和值头尾[1]()
-            'blue_recent': 5,  # 排除最近N期蓝球[1]()
-            'same_period': True  # 排除去年同期号[1]()
-        }
-
-    # 数据加载与存储
-    def load_history(self):
-        try:
-            with open(data_file, 'r') as f:
-                return [SsqData(**item) for item in json.load(f)]
-        except (FileNotFoundError, json.JSONDecodeError):
-            return []
-
-    def save_history(self, new_data):
-        combined = self.history + new_data
-        with open(data_file, 'w') as f:
-            json.dump([vars(d) for d in combined], f, default=str)
-
-    # 核心预测算法
-    def generate_prediction(self):
-        red_probs = self._calculate_red_probability()
-        blue_probs = self._calculate_blue_probability()
-
-        predictions = []
-        for _ in range(5):
-            red = self._select_red(red_probs)
-            blue = self._select_blue(blue_probs)
-            predictions.append({'红球': red, '蓝球': blue})
-        return predictions
-
-    def _calculate_red_probability(self):
-        # 融合区间权重和冷热分析[[2][5][6]()
-        counter = Counter(n for d in self.history for n in d.red)
-        period_data = [d for d in self.history if d.date.year == datetime.now().year - 1]
-        period_exclude = set(n for d in period_data for n in d.red)  # [1]()
-
-        probs = {}
-        for n in range(1, 34):
-            interval = 1 if n <= 11 else 2 if n <= 22 else 3
-            base = counter[n] / len(self.history) if self.history else 1 / 33
-            weight = self.interval_weights['红球'][interval]
-            if n in period_exclude and self.exclude_rules['same_period']:
-                weight *= 0.2  # 降低去年同期号概率[1]()
-            probs[n] = base * weight
-        return self._apply_exclusion_rules(probs)
-
-    def _calculate_blue_probability(self):
-        # 结合大小区分布和近期排除[[1][2]()
-        counter = Counter(d.blue for d in self.history)
-        recent_blue = [d.blue for d in self.history[:self.exclude_rules['blue_recent']]]
-
-        probs = {}
-        for n in range(1, 17):
-            interval = 1 if n <= 8 else 2
-            base = counter[n] / len(self.history) if self.history else 1 / 16
-            weight = self.interval_weights['蓝球'][interval]
-            if n in recent_blue and self.exclude_rules['blue_recent']:
-                weight *= 0.3  # 降低近期出现过的蓝球概率[2]()
-            probs[n] = base * weight
-        return probs
-
-    # 高级排除策略
-    def _apply_exclusion_rules(self, probs):
-        if self.exclude_rules['red_head_tail'] and self.history:
-            last_sum = sum(self.history[0].red)
-            head, tail = last_sum // 100 % 10, last_sum % 10  # [1]()
-            for n in probs:
-                if n in (head, tail):
-                    probs[n] *= 0.2
-        return probs
-
-    # 选择算法
-    def _select_red(self, probs):
-        numbers = set()  # 使用 set 避免重复
-        while len(numbers) < 6:
-            candidates = random.choices(list(probs.keys()), weights=list(probs.values()), k=10)
-            for n in candidates:
-                numbers.add(n)
-                if len(numbers) == 6:
-                    break
-        return sorted(numbers)
-
-    def _select_blue(self, probs):
-        return random.choices(list(probs.keys()), weights=list(probs.values()), k=1)[0]
-
-
-# 数据获取与处理
-def fetch_new_data():
+def fetch_lottery_data() -> list[LotteryResult]:
+    """获取最近30期开奖数据"""
     url = "http://www.cwl.gov.cn/cwl_admin/front/cwlkj/search/kjxx/findDrawNotice"
     params = {
         "name": "ssq",
@@ -123,81 +24,144 @@ def fetch_new_data():
         "pageSize": 30,
         "systemType": "PC"
     }
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+
     try:
-        res = requests.get(url, params=params)
-        res.raise_for_status()
-        new_data = [
-            SsqData(
-                code=item['code'],
-                date=item['date'],
-                red=item['red'],
-                blue=item['blue']
-            ) for item in res.json()['result']
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        return [
+            LotteryResult(
+                code=item["code"],
+                red_balls=list(map(int, item["red"].split(","))),
+                blue_ball=int(item["blue"])
+            )
+            for item in data.get("result", [])
         ]
-        return new_data
     except Exception as e:
         print(f"数据获取失败: {e}")
         return []
 
+def calculate_probabilities(results: list[LotteryResult]) -> tuple[dict, dict]:
+    """计算号码出现概率"""
+    red_counter = Counter()
+    blue_counter = Counter()
+    
+    for result in results:
+        red_counter.update(result.red_balls)
+        blue_counter.update([result.blue_ball])
+    
+    total = len(results)
+    red_prob = {num: count/total for num, count in red_counter.items()}
+    blue_prob = {num: count/total for num, count in blue_counter.items()}
+    return red_prob, blue_prob
 
-# 预测验证与优化
-def check_prediction(model):
-    if not model.history or not predict_file.exists():
-        return
+def weighted_select(numbers: list[int], weights: list[float], count: int) -> list[int]:
+    """加权随机选择不重复号码"""
+    selected = []
+    candidates = numbers.copy()
+    candidate_weights = weights.copy()
+    
+    for _ in range(count):
+        total = sum(candidate_weights)
+        if total == 0:
+            return random.sample(numbers, count)
+        probabilities = [w/total for w in candidate_weights]
+        chosen_idx = random.choices(range(len(candidates)), weights=probabilities, k=1)[0]
+        selected.append(candidates[chosen_idx])
+        del candidates[chosen_idx]
+        del candidate_weights[chosen_idx]
+    return sorted(selected)
 
-    with open(predict_file, 'r') as f:
-        last_pred = json.load(f)[0]
+def generate_prediction(red_prob: dict, blue_prob: dict, num_sets=5) -> list[dict]:
+    """生成预测结果"""
+    red_numbers = list(red_prob.keys())
+    red_weights = [red_prob[num] for num in red_numbers]
+    blue_numbers = list(blue_prob.keys())
+    blue_weights = [blue_prob[num] for num in blue_numbers]
 
-    latest = model.history[0]
-    red_match = len(set(last_pred['红球']) & set(latest.red))
-    blue_match = last_pred['蓝球'] == latest.blue
+    predictions = []
+    for _ in range(num_sets):
+        red = weighted_select(red_numbers, red_weights, 6)
+        blue = random.choices(blue_numbers, weights=blue_weights, k=1)[0]
+        predictions.append({
+            "red": red,
+            "blue": blue,
+            "combined": ", ".join(f"{n:02d}" for n in red) + f" + {blue:02d}"
+        })
+    return predictions
 
-    # 根据命中情况动态调整权重[[5][7]()
-    adjustment = 1 + red_match * 0.1 + blue_match * 0.2
-    for k in model.interval_weights['红球']:
-        model.interval_weights['红球'][k] *= adjustment
+def format_message(predictions: list[dict], latest: LotteryResult) -> str:
+    """格式化推送消息"""
+    html_content = """
+    <style>
+        .lottery-table {border-collapse: collapse; margin: 20px 0;}
+        .lottery-table td, .lottery-table th {padding: 10px; border: 1px solid #ddd;}
+        .red-ball {color: #c00; font-weight: bold;}
+        .blue-ball {color: #00c; font-weight: bold;}
+    </style>
+    <h2>双色球预测结果</h2>
+    <h3>最新开奖信息</h3>
+    <p>期号：{latest_code}</p>
+    <p>红球：<span class="red-ball">{latest_red}</span></p>
+    <p>蓝球：<span class="blue-ball">{latest_blue:02d}</span></p>
+    <h3>下期预测号码</h3>
+    <table class="lottery-table">
+        <tr><th>序号</th><th>预测号码</th></tr>
+    """.format(
+        latest_code=latest.code,
+        latest_red=" ".join(f"{n:02d}" for n in latest.red_balls),
+        latest_blue=latest.blue_ball
+    )
 
+    for i, pred in enumerate(predictions, 1):
+        html_content += f"""
+        <tr>
+            <td>{i}</td>
+            <td>
+                <span class="red-ball">{pred['combined'].split(' + ')[0]}</span>
+                <span class="blue-ball">+ {pred['combined'].split(' + ')[1]}</span>
+            </td>
+        </tr>
+        """
+    html_content += "</table>"
+    return html_content
 
-# 发送通知
-def send_notice(content, token, topic):
-    url = "http://pushplus.hxtrip.com/send"
+def send_pushplus_notification(content: str):
+    """发送PushPlus通知"""
+    api_url = "http://www.pushplus.plus/send"
     payload = {
-        "token": token,
-        "title": topic,
+        "token": PUSH_PLUS_TOKEN,
+        "title": "双色球预测分析",
         "content": content,
-        "template": "html"  # 根据需要设置不同的通知模板
+        "template": "html",
+        "topic": PUSH_PLUS_TOPIC
     }
     try:
-        res = requests.post(url, data=payload)
-        res.raise_for_status()
-        print("通知发送成功")
+        response = requests.post(api_url, json=payload, timeout=10)
+        print("通知发送状态:", response.status_code)
     except Exception as e:
         print(f"通知发送失败: {e}")
 
-
-# 主流程
 if __name__ == "__main__":
-    # 初始化模型
-    model = PredictionModel()
+    # 获取历史数据
+    history_data = fetch_lottery_data()
+    if not history_data:
+        print("未获取到开奖数据，请检查网络连接")
+        exit()
 
-    # 获取新数据
-    new_data = fetch_new_data()
-    if new_data:
-        model.save_history(new_data)
-        model.history = model.load_history()  # 刷新数据
-
+    # 计算概率
+    red_prob, blue_prob = calculate_probabilities(history_data)
+    
     # 生成预测
-    predictions = model.generate_prediction()
-    with open(predict_file, 'w') as f:
-        json.dump(predictions, f)
-
-    # 验证上次预测
-    check_prediction(model)
-
-    # 构建通知内容
-    content = "最新预测结果：\n"
-    for i, pred in enumerate(predictions, 1):
-        content += f"第{i}组：红球{' '。join(map(str, pred['红球']))} | 蓝球{pred['蓝球']}\n"
-
-    # 发送通知（需配置PushPlus）
-    send_notice(content, token, topic)
+    predictions = generate_prediction(red_prob, blue_prob)
+    
+    # 准备通知内容
+    latest_result = history_data[0]
+    message = format_message(predictions, latest_result)
+    
+    # 发送通知
+    send_pushplus_notification(message)
+    print("预测结果已发送")
