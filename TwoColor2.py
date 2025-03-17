@@ -4,6 +4,8 @@ import random
 from dataclasses import dataclass
 from collections import Counter
 from datetime import datetime
+from typing import List
+
 
 # 配置信息（建议通过环境变量设置）
 PUSH_PLUS_TOKEN = os.getenv("PUSH_PLUS_TOKEN", "your_token")
