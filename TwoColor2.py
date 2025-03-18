@@ -8,8 +8,8 @@ from typing import List
 
 
 # 配置信息（建议通过环境变量设置）
-PUSH_PLUS_TOKEN = os.getenv("PUSH_PLUS_TOKEN", "your_token")
-PUSH_PLUS_TOPIC = os.getenv("PUSH_PLUS_TOPIC", "your_topic")
+PUSH_PLUS_TOKEN = os.getenv("PUSH_PLUS_TOKEN")
+PUSH_PLUS_TOPIC = os.getenv("PUSH_PLUS_TOPIC")
 
 @dataclass
 class LotteryResult:
@@ -21,9 +21,9 @@ def fetch_lottery_data() -> list[LotteryResult]:
     """获取最近30期开奖数据"""
     url = "http://www.cwl.gov.cn/cwl_admin/front/cwlkj/search/kjxx/findDrawNotice"
     params = {
-        "name": "ssq",
-        "pageNo": 1,
-        "pageSize": 30,
+        "name": "ssq"，
+        "pageNo": 1，
+        "pageSize": 30，
         "systemType": "PC"
     }
     headers = {
