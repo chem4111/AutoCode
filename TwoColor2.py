@@ -7,13 +7,15 @@ import json
 
 PUSH_PLUS_TOKEN = os.getenv("PUSH_PLUS_TOKEN")
 PUSH_PLUS_USER = os.getenv("PUSH_PLUS_USER")
-PREDICTION_FILE = "predictions.json"  # 用于存储历史预测数据的文件
+PREDICTION_FILE = "predictions.json"  # 存储预测数据的文件
+
 
 class Ssq:
     def __init__(self, code, red, blue):
         self.code = code
         self.red = red
         self.blue = blue
+
 
 def get_recent_data():
     url = ("http://www.cwl.gov.cn/cwl_admin/front/cwlkj/search/kjxx/"
@@ -33,21 +35,61 @@ def get_recent_data():
 
     return kjList
 
-def calculate_probabilities(kjList):
-    red_counter = Counter()
-    blue_counter = Counter()
-    total_records = len(kjList)
 
-    for record in kjList:
-        red_counter.update(record.red.split(','))
-        blue_counter.update(record.blue.split(','))
+def load_previous_predictions():
+    """加载之前的预测数据"""
+    if os.path.exists(PREDICTION_FILE):
+        with open(PREDICTION_FILE, "r", encoding="utf-8") as f:
+            try:
+                return json.load(f)
+            except json.JSONDecodeError:
+                return {}
+    return {}
 
-    red_probabilities = {num: count / total_records for num, count in red_counter.items()}
-    blue_probabilities = {num: count / total_records for num, count in blue_counter.items()}
 
-    return red_probabilities, blue_probabilities
+def save_predictions(predictions):
+    """保存本次预测数据"""
+    data = {
+        "期数": str(int(current_issue) + 1),  # 预测下一期
+        "预测": predictions,
+        "时间": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    with open(PREDICTION_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+
+
+def check_winning(predicted_numbers, actual_red, actual_blue):
+    """检查预测号码的中奖情况"""
+    actual_red_set = set(actual_red.split(","))
+    actual_blue = int(actual_blue)
+    
+    results = []
+    for idx, group in enumerate(predicted_numbers, 1):
+        red_match = len(set(group["红球"]) & actual_red_set)
+        blue_match = (group["蓝球"] == actual_blue)
+
+        if red_match == 6 and blue_match:
+            level = "一等奖"
+        elif red_match == 6:
+            level = "二等奖"
+        elif red_match == 5 and blue_match:
+            level = "三等奖"
+        elif red_match == 5 or (red_match == 4 and blue_match):
+            level = "四等奖"
+        elif red_match == 4 or (red_match == 3 and blue_match):
+            level = "五等奖"
+        elif blue_match:
+            level = "六等奖"
+        else:
+            level = "未中奖"
+        
+        results.append(f"预测第 {idx} 组号码: 中奖等级: {level}")
+
+    return "\n".join(results)
+
 
 def send_notice(content, token, topic):
+    """发送通知"""
     title = "双色球预测"
     url = f"http://www.pushplus.plus/send?token={token}&title={title}&content={content}&template=html&topic={topic}"
     try:
@@ -56,48 +98,6 @@ def send_notice(content, token, topic):
     except requests.RequestException as e:
         print(f"发送通知失败: {e}")
 
-def check_winning_level(prediction, actual):
-    red_match = set(prediction["红球"]).intersection(set(actual.red.split(',')))
-    blue_match = (prediction["蓝球"] == actual.blue)
-    
-    red_count = len(red_match)
-    if red_count == 6:
-        if blue_match:
-            return "一等奖"
-        else:
-            return "二等奖"
-    elif red_count == 5:
-        if blue_match:
-            return "三等奖"
-        else:
-            return "四等奖"
-    elif red_count == 4:
-        if blue_match:
-            return "四等奖"
-        else:
-            return "五等奖"
-    elif red_count == 3:
-        if blue_match:
-            return "五等奖"
-        else:
-            return "六等奖"
-    elif red_count == 2 or red_count == 1 or red_count == 0:
-        if blue_match:
-            return "六等奖"
-        else:
-            return "未中奖"
-
-def load_predictions():
-    # 读取保存的预测数据
-    if os.path.exists(PREDICTION_FILE):
-        with open(PREDICTION_FILE, 'r', encoding='utf-8') as file:
-            return json.load(file)
-    return []
-
-def save_predictions(predictions):
-    # 保存预测数据
-    with open(PREDICTION_FILE, 'w', encoding='utf-8') as file:
-        json.dump(predictions, file, ensure_ascii=False, indent=4)
 
 # 获取当前日期
 current_date = datetime.now()
@@ -108,47 +108,37 @@ kjList = get_recent_data()
 if not kjList:
     print("未能获取开奖数据。")
 else:
+    # 获取当前开奖期号
+    latest_record = kjList[0]
+    current_issue = latest_record.code
+
+    # 读取上次预测数据
+    previous_data = load_previous_predictions()
+    last_pred_issue = previous_data.get("期数")
+    last_pred_numbers = previous_data.get("预测", [])
+
     # 预测下一期的五组数据
+    next_issue = str(int(current_issue) + 1)
     predicted_data = []
     for i in range(5):
-        # 生成红球
         red_balls = random.sample(range(1, 34), 6)
         red_balls.sort()
-
-        # 生成蓝球
         blue_ball = random.randint(1, 16)
-
         predicted_data.append({"红球": red_balls, "蓝球": blue_ball})
 
-    # 打印预测的下一期五组号码
-    print("\n预测下一期的五组数据:")
-    predicted_content = ""
+    # 打印预测的五组数据
+    predicted_content = f"\n预测期数: {next_issue}\n"
     for i, data in enumerate(predicted_data, 1):
-        predicted_content += f"预测第 {i} 组号码:\n"
-        predicted_content += "红球: " + ", ".join(map(str, data["红球"])) + "\n"
-        predicted_content += "蓝球: " + str(data["蓝球"]) + "\n"
-        
-        # 打印每组号码
-        print(f"预测第 {i} 组号码:")
-        print("红球: " + ", ".join(map(str, data["红球"])))
-        print("蓝球:", data["蓝球"])
-        print()
+        predicted_content += f"\n预测第 {i} 组号码:\n红球: {', '.join(map(str, data['红球']))}\n蓝球: {data['蓝球']}\n"
 
-    # 获取上一期的预测数据
-    last_pred = load_predictions()
-
-    if last_pred:
-        # 计算中奖等级并对比
-        print("\n上次五期中奖等级:")
-        for i, data in enumerate(predicted_data, 1):
-            for record in kjList:
-                level = check_winning_level(data, record)
-                print(f"预测第 {i} 组号码: 中奖等级: {level}")
+    # 计算上次预测的中奖情况
+    if last_pred_issue and last_pred_issue == current_issue:
+        winning_results = check_winning(last_pred_numbers, latest_record.red, latest_record.blue)
+        last_winning_content = f"\n上次预测期数 {last_pred_issue} 的中奖情况:\n{winning_results}\n"
     else:
-        print("本期没有预测数据，无法计算中奖等级")
+        last_winning_content = "\n上次五期中奖等级: 本期没有预测\n"
 
-    # 获取最新一期的开奖信息
-    latest_record = kjList[0]
+    # 最新开奖信息
     latest_content = (f"\n最新一期的开奖信息：\n期数: {latest_record.code}, 红球: {latest_record.red}, "
                       f"蓝球: {latest_record.blue}\n")
 
@@ -156,4 +146,15 @@ else:
     save_predictions(predicted_data)
 
     # 发送 PushPlus 通知
-    send_notice(predicted_content + latest_content, PUSH_PLUS_TOKEN, PUSH_PLUS_USER)
+    send_notice(predicted_content + last_winning_content + latest_content, PUSH_PLUS_TOKEN, PUSH_PLUS_USER)
+
+    # 打印最终结果
+    print(predicted_content)
+    print(last_winning_content)
+    print(latest_content)
+
+    # 每月清理一次预测数据
+    if datetime.now().day == 1:
+        if os.path.exists(PREDICTION_FILE):
+            os.remove(PREDICTION_FILE)
+            print("预测数据已清理")
