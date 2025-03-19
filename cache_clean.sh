@@ -1,19 +1,22 @@
 #!/bin/bash
 
-# 获取总内存和空闲内存信息
-total_mem=$(grep MemTotal /proc/meminfo | awk '{print $2}')
-free_mem=$(grep MemFree /proc/meminfo | awk '{print $2}')
+# 使用 free -h 获取内存数据并解析
+free_output=$(free -h | grep Mem)
 
-# 计算已使用的内存
+# 从输出中提取总内存、空闲内存等信息
+total_mem=$(echo $free_output | awk '{print $2}' | sed 's/Mi//')
+free_mem=$(echo $free_output | awk '{print $4}' | sed 's/Mi//')
+
+# 计算已使用内存
 used_mem=$((total_mem - free_mem))
 
-# 计算内存使用百分比
+# 计算物理内存使用百分比
 used_percentage=$(echo "scale=2; $used_mem / $total_mem * 100" | bc)
 
 # 输出内存使用情况
-echo "物理内存总计：$((total_mem / 1024)) MB"
-echo "空闲内存：$((free_mem / 1024)) MB"
-echo "已用内存：$((used_mem / 1024)) MB"
+echo "物理内存总计：$total_mem Mi"
+echo "空闲内存：$free_mem Mi"
+echo "已用内存：$used_mem Mi"
 echo "物理内存使用率：$used_percentage%"
 
 # 设置阈值，判断是否清理缓存
