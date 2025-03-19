@@ -37,8 +37,8 @@ def calculate_probabilities(kjList):
     total_records = len(kjList)
 
     for record in kjList:
-        red_counter.update(record.red。split(','))
-        blue_counter.update(record.blue。split(','))
+        red_counter.update(record.red.split(','))
+        blue_counter.update(record.blue.split(','))
 
     red_probabilities = {num: count / total_records for num, count in red_counter.items()}
     blue_probabilities = {num: count / total_records for num, count in blue_counter.items()}
@@ -55,7 +55,7 @@ def send_notice(content, token, topic):
         print(f"发送通知失败: {e}")
 
 # 获取当前日期
-current_date = datetime.当前()
+current_date = datetime.now()
 
 # 获取最新一期的数据
 kjList = get_recent_data()
@@ -67,11 +67,11 @@ else:
     predicted_data = []
     for i in range(5):
         # 生成红球
-        red_balls = random.sample(range(1， 34)， 6)
+        red_balls = random.sample(range(1, 34), 6)
         red_balls.sort()
 
         # 生成蓝球
-        blue_ball = random.randint(1， 16)
+        blue_ball = random.randint(1, 16)
 
         predicted_data.append({"红球": red_balls, "蓝球": blue_ball})
 
@@ -80,12 +80,12 @@ else:
     predicted_content = ""
     for i, data in enumerate(predicted_data, 1):
         predicted_content += f"预测第 {i} 组号码:\n"
-        predicted_content += "红球: " + ", "。join(map(str, data["红球"])) + "\n"
+        predicted_content += "红球: " + ", ".join(map(str, data["红球"])) + "\n"
         predicted_content += "蓝球: " + str(data["蓝球"]) + "\n"
         
         # 打印每组号码
         print(f"预测第 {i} 组号码:")
-        print("红球: " + ", "。join(map(str, data["红球"])))
+        print("红球: " + ", ".join(map(str, data["红球"])))
         print("蓝球:", data["蓝球"])
         print()
 
