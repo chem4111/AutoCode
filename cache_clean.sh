@@ -3,9 +3,13 @@
 # 获取总内存和空闲内存信息
 total_mem=$(grep MemTotal /proc/meminfo | awk '{print $2}')
 free_mem=$(grep MemFree /proc/meminfo | awk '{print $2}')
+buffers_mem=$(grep Buffers /proc/meminfo | awk '{print $2}')
+cached_mem=$(grep Cached /proc/meminfo | awk '{print $2}')
 
-# 计算已使用的内存和已使用内存比例
-used_mem=$((total_mem - free_mem))
+# 计算已使用的物理内存（不包括缓存和缓冲区）
+used_mem=$((total_mem - free_mem - buffers_mem - cached_mem))
+
+# 计算已使用内存百分比
 used_percentage=$(echo "scale=2; $used_mem / $total_mem * 100" | bc)
 
 # 设置阈值
