@@ -15,10 +15,17 @@ used_percentage=$(echo "scale=2; $used_mem / $total_mem * 100" | bc)
 # 设置阈值
 threshold=85.0
 
+# 输出当前内存使用情况
+echo "## 开始执行... $(date '+%Y-%m-%d %H:%M:%S')"
+echo "物理内存使用率为 $used_percentage%，"
+
 # 判断是否超过阈值，如果是则清理缓存
 if (( $(echo "$used_percentage > $threshold" | bc -l) )); then
-    echo "Memory usage is over 85%, clearing cache..."
+    echo "已用内存超过 $threshold%，正在清理缓存..."
     sync; echo 3 > /proc/sys/vm/drop_caches
 else
-    echo "Memory usage is below 85%, no need to clear cache."
+    echo "未达到 $threshold%，无需清理。"
 fi
+
+# 执行结束输出
+echo "## 执行结束... $(date '+%Y-%m-%d %H:%M:%S') 耗时 1 秒"
