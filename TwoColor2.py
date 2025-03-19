@@ -142,9 +142,8 @@ else:
         print("\n上次五期中奖等级:")
         for i, data in enumerate(predicted_data, 1):
             for record in kjList:
-                if record.code == str(int(current_date.strftime("%Y%m")) - 1):
-                    level = check_winning_level(data, record)
-                    print(f"预测第 {i} 组号码: 中奖等级: {level}")
+                level = check_winning_level(data, record)
+                print(f"预测第 {i} 组号码: 中奖等级: {level}")
     else:
         print("本期没有预测数据，无法计算中奖等级")
 
