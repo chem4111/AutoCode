@@ -7,154 +7,155 @@ import json
 
 PUSH_PLUS_TOKEN = os.getenv("PUSH_PLUS_TOKEN")
 PUSH_PLUS_USER = os.getenv("PUSH_PLUS_USER")
-PREDICTION_FILE = "predictions.json"  # 存储预测数据的文件
+PREDICTION_FILE = "predictions.json"
 
-
-class Ssq:
+class LotteryRecord:
     def __init__(self, code, red, blue):
         self.code = code
         self.red = red
         self.blue = blue
 
-
-def get_recent_data():
-    url = ("http://www.cwl.gov.cn/cwl_admin/front/cwlkj/search/kjxx/"
-           "findDrawNotice?name=ssq&issueCount=&issueStart=&issueEnd=&dayStart=&dayEnd=&pageNo=1&pageSize=30&week=&systemType=PC")
-    try:
-        res = requests.get(url)
-        res.raise_for_status()
-        obj = res.json()
-    except requests.RequestException as e:
-        print(f"请求数据失败: {e}")
-        return []
-
-    kjList = []
-    for item in obj['result']:
-        ssq = Ssq(item['code'], item['red'], item['blue'])
-        kjList.append(ssq)
-
-    return kjList
-
-
-def load_previous_predictions():
-    """加载之前的预测数据"""
-    if os.path.exists(PREDICTION_FILE):
-        with open(PREDICTION_FILE, "r", encoding="utf-8") as f:
-            try:
-                return json.load(f)
-            except json.JSONDecodeError:
-                return {}
-    return {}
-
+def fetch_lottery_data():
+    url = "https://api.apiopen.top/getLottery"
+    response = requests.get(url)
+    if response.status_code == 200:
+        data = response.json()
+        if data["code"] == 200:
+            return [LotteryRecord(d["expect"], d["red"], d["blue"]) for d in data["data"]]
+    return []
 
 def save_predictions(predictions):
-    """保存本次预测数据"""
-    data = {
-        "期数": str(int(current_issue) + 1),  # 预测下一期
-        "预测": predictions,
-        "时间": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    }
     with open(PREDICTION_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+        json.dump(predictions, f, ensure_ascii=False, indent=4)
 
+def load_previous_predictions():
+    if os.path.exists(PREDICTION_FILE):
+        with open(PREDICTION_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return None
 
-def check_winning(predicted_numbers, actual_red, actual_blue):
-    """检查预测号码的中奖情况"""
-    actual_red_set = set(actual_red.split(","))
-    actual_blue = int(actual_blue)
+def get_frequent_numbers(kjList, top_n=10):
+    red_counter = Counter()
+    blue_counter = Counter()
     
-    results = []
-    for idx, group in enumerate(predicted_numbers, 1):
-        red_match = len(set(group["红球"]) & actual_red_set)
-        blue_match = (group["蓝球"] == actual_blue)
+    for record in kjList:
+        red_counter.update(record.red.split(","))
+        blue_counter.update([record.blue])
+
+    most_common_reds = [int(num) for num, _ in red_counter.most_common(top_n)]
+    most_common_blues = [int(num) for num, _ in blue_counter.most_common(top_n // 2)]
+
+    return most_common_reds, most_common_blues
+
+def adjust_by_last_draw(last_reds, last_blue, red_candidates):
+    adjusted_reds = set()
+    
+    for red in last_reds:
+        red = int(red)
+        if red > 16:  
+            candidates = [r for r in red_candidates if r < 17]
+        else:  
+            candidates = [r for r in red_candidates if r >= 17]
+
+        if candidates:
+            adjusted_reds.add(random.choice(candidates))
+
+    while len(adjusted_reds) < 6:
+        adjusted_reds.add(random.choice(red_candidates))
+
+    adjusted_reds = sorted(adjusted_reds)
+
+    blue_candidates = [b for b in range(1, 17) if b != int(last_blue)]
+    adjusted_blue = random.choice(blue_candidates)
+
+    return adjusted_reds, adjusted_blue
+
+def check_prizes(predicted_data, current_result):
+    prize_levels = []
+    current_reds = set(map(int, current_result.red.split(",")))
+    current_blue = int(current_result.blue)
+
+    for prediction in predicted_data:
+        red_match = len(set(prediction["红球"]) & current_reds)
+        blue_match = (prediction["蓝球"] == current_blue)
 
         if red_match == 6 and blue_match:
-            level = "一等奖"
+            prize_levels.append("一等奖")
         elif red_match == 6:
-            level = "二等奖"
+            prize_levels.append("二等奖")
         elif red_match == 5 and blue_match:
-            level = "三等奖"
+            prize_levels.append("三等奖")
         elif red_match == 5 or (red_match == 4 and blue_match):
-            level = "四等奖"
+            prize_levels.append("四等奖")
         elif red_match == 4 or (red_match == 3 and blue_match):
-            level = "五等奖"
-        elif blue_match:
-            level = "六等奖"
+            prize_levels.append("五等奖")
         else:
-            level = "未中奖"
-        
-        results.append(f"预测第 {idx} 组号码: 中奖等级: {level}")
+            prize_levels.append("未中奖")
 
-    return "\n".join(results)
+    return prize_levels
 
+def send_notice(message, token, user):
+    if token and user:
+        url = "http://www.pushplus.plus/send"
+        data = {"token": token, "title": "双色球预测", "content": message, "topic": user}
+        requests.post(url, json=data)
 
-def send_notice(content, token, topic):
-    """发送通知"""
-    title = "双色球预测"
-    url = f"http://www.pushplus.plus/send?token={token}&title={title}&content={content}&template=html&topic={topic}"
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-    except requests.RequestException as e:
-        print(f"发送通知失败: {e}")
+def main():
+    start_time = datetime.now()
+    print(f"\n## 开始执行... {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n")
 
+    kjList = fetch_lottery_data()
+    if not kjList:
+        print("无法获取开奖数据")
+        return
 
-# 获取当前日期
-current_date = datetime.now()
+    current_issue = kjList[0].code  
+    previous_predictions = load_previous_predictions()
 
-# 获取最新一期的数据
-kjList = get_recent_data()
+    if previous_predictions and previous_predictions["期数"] == str(int(current_issue) - 1):
+        last_prizes = check_prizes(previous_predictions["预测"], kjList[0])
+    else:
+        last_prizes = ["本期没有预测"] * 5
 
-if not kjList:
-    print("未能获取开奖数据。")
-else:
-    # 获取当前开奖期号
-    latest_record = kjList[0]
-    current_issue = latest_record.code
+    most_common_reds, most_common_blues = get_frequent_numbers(kjList)
 
-    # 读取上次预测数据
-    previous_data = load_previous_predictions()
-    last_pred_issue = previous_data.get("期数")
-    last_pred_numbers = previous_data.get("预测", [])
-
-    # 预测下一期的五组数据
     next_issue = str(int(current_issue) + 1)
     predicted_data = []
+
     for i in range(5):
-        red_balls = random.sample(range(1, 34), 6)
-        red_balls.sort()
-        blue_ball = random.randint(1, 16)
+        if len(kjList) > 1:
+            last_reds = kjList[1].red.split(",")  
+            last_blue = kjList[1].blue  
+            red_balls, blue_ball = adjust_by_last_draw(last_reds, last_blue, most_common_reds)
+        else:
+            red_balls = sorted(random.sample(most_common_reds, 6))
+            blue_ball = random.choice(most_common_blues)
+
         predicted_data.append({"红球": red_balls, "蓝球": blue_ball})
 
-    # 打印预测的五组数据
-    predicted_content = f"\n预测期数: {next_issue}\n"
-    for i, data in enumerate(predicted_data, 1):
-        predicted_content += f"\n预测第 {i} 组号码:\n红球: {', '.join(map(str, data['红球']))}\n蓝球: {data['蓝球']}\n"
+    message_content = f"预测期数: {next_issue}\n"
+    for i, data in enumerate(predicted_data):
+        message_content += (f"\n预测第 {i+1} 组号码:\n"
+                            f"红球: {', '.join(map(str, data['红球']))}\n"
+                            f"蓝球: {data['蓝球']}\n")
 
-    # 计算上次预测的中奖情况
-    if last_pred_issue and last_pred_issue == current_issue:
-        winning_results = check_winning(last_pred_numbers, latest_record.red, latest_record.blue)
-        last_winning_content = f"\n上次预测期数 {last_pred_issue} 的中奖情况:\n{winning_results}\n"
-    else:
-        last_winning_content = "\n上次五期中奖等级: 本期没有预测\n"
+    message_content += "\n上次五期中奖等级:\n"
+    for i, level in enumerate(last_prizes):
+        message_content += f"预测第 {i+1} 组号码: 中奖等级: {level}\n"
 
-    # 最新开奖信息
-    latest_content = (f"\n最新一期的开奖信息：\n期数: {latest_record.code}, 红球: {latest_record.red}, "
-                      f"蓝球: {latest_record.blue}\n")
+    latest_record = kjList[0]
+    message_content += (f"\n最新一期的开奖信息：\n期数: {latest_record.code}, 红球: {latest_record.red}, "
+                        f"蓝球: {latest_record.blue}\n")
 
-    # 保存当前预测
-    save_predictions(predicted_data)
+    print(message_content)
 
-    # 发送 PushPlus 通知
-    send_notice(predicted_content + last_winning_content + latest_content, PUSH_PLUS_TOKEN, PUSH_PLUS_USER)
+    save_predictions({"期数": next_issue, "预测": predicted_data})
 
-    # 打印最终结果
-    print(predicted_content)
-    print(last_winning_content)
-    print(latest_content)
+    send_notice(message_content, PUSH_PLUS_TOKEN, PUSH_PLUS_USER)
 
-    # 每月清理一次预测数据
-    if datetime.now().day == 1:
-        if os.path.exists(PREDICTION_FILE):
-            os.remove(PREDICTION_FILE)
-            print("预测数据已清理")
+    end_time = datetime.now()
+    elapsed_time = (end_time - start_time).total_seconds()
+    print(f"\n## 执行结束... {end_time.strftime('%Y-%m-%d %H:%M:%S')} 耗时 {elapsed_time:.2f} 秒")
+
+if __name__ == "__main__":
+    main()
