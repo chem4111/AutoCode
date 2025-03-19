@@ -3,6 +3,7 @@ import os
 import sys  # 添加sys库用于退出程序
 
 # export ikuuu='邮箱1&密码1&备注1#邮箱2&密码2&备注2#邮箱3&密码3&备注3'
+
 #你需要在环境变量中设置 PUSH_PLUS_TOKEN 和 PUSH_PLUS_USER。
 #PUSH_PLUS_TOKEN：你的 Push Plus 个人令牌，用于一对一推送。
 #PUSH_PLUS_USER：你的 Push Plus 群组编码，如果没有则可以留空。
