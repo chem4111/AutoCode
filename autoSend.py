@@ -77,7 +77,7 @@ def parse_env_db(file_path: str) -> Dict[str, Set[str]]:
                         end_index = len(value)
                     pt_pin = value[start_index:end_index].strip()
 
-                # 提取UID（remarks后面所有内容）
+                # 提取UID（引号内所有内容）
                 uid = None
                 if remarks.startswith(UID_PREFIX):
                     uid = remarks[len(UID_PREFIX):].strip()
