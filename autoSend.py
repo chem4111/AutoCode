@@ -4,8 +4,8 @@ import logging
 from typing import Dict, Set, List, Any
 
 # 配置常量
-INPUT_DB_PATH = "/db/env.db"
-OUTPUT_FILE_PATH = "/scripts/CK_WxPusherUid.json"
+INPUT_DB_PATH = "/ql/db/env.db"
+OUTPUT_FILE_PATH = "/ql/scripts/CK_WxPusherUid.json"
 ENCODING = "utf-8"
 JD_COOKIE_NAME = "JD_COOKIE"
 UID_PREFIX = "UID_"
