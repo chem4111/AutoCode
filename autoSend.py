@@ -73,7 +73,7 @@ def update_ck_file(input_db_path, output_file_path):
     print(f"成功更新文件：{output_file_path}，当前包含 {len(output_list)} 条记录")
 
 # 配置路径（根据实际情况修改）
-INPUT_DB = "/root/docker/ql/db/env.db"
-OUTPUT_FILE = "/root/docker/ql/scripts/CK_WxPusherUid.json"
+INPUT_DB = "/db/env.db"
+OUTPUT_FILE = "/scripts/CK_WxPusherUid.json"
 
 update_ck_file(INPUT_DB, OUTPUT_FILE)
