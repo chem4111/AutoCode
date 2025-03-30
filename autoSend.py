@@ -68,24 +68,24 @@ def parse_env_db(file_path: str) -> Dict[str, Set[str]]:
                 value = data.get("value", "")
                 remarks = data.get("remarks", "")
 
-                # 提取pt_pin（引号内所有内容）
-                pt_pin = None
-                if "pt_pin=" in value:
-                    start_index = value.find("pt_pin=") + len("pt_pin=")
+                # 提取pt_pin
+                start_index = value.find("pt_pin=")
+                if start_index != -1:
+                    start_index += len("pt_pin=")
                     end_index = value.find(";", start_index)
                     if end_index == -1:
                         end_index = len(value)
                     pt_pin = value[start_index:end_index].strip()
-
-                # 提取UID（引号内所有内容）
-                uid = None
-                if remarks.startswith(UID_PREFIX):
-                    uid = remarks[len(UID_PREFIX):].strip()
-
-                if pt_pin and uid:
-                    result.setdefault(pt_pin, set()).add(uid)
                 else:
-                    logger.debug("行 %d: 无效记录 value=%s remarks=%s", line_num, value, remarks)
+                    continue
+
+                # 提取UID，带上UID_前缀
+                if remarks.startswith(UID_PREFIX):
+                    uid = remarks
+                else:
+                    continue
+
+                result.setdefault(pt_pin, set()).add(uid)
 
     except IOError as e:
         logger.error("读取环境数据库失败: %s", e)
