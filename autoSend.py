@@ -1,79 +1,133 @@
 import json
 import os
+import logging
+from typing import Dict, Set, List, Any
 
-def update_ck_file(input_db_path, output_file_path):
-    # 初始化结果字典：pt_pin -> set(Uid)
-    result_dict = {}
+# 配置常量
+INPUT_DB_PATH = "/db/env.db"
+OUTPUT_FILE_PATH = "/scripts/CK_WxPusherUid.json"
+ENCODING = "utf-8"
+JD_COOKIE_NAME = "JD_COOKIE"
+UID_PREFIX = "UID_"
 
-    # 1. 读取现有 JSON 文件
-    if os.path.exists(output_file_path):
-        with open(output_file_path, 'r', encoding='utf-8') as f:
-            existing_data = json.load(f)
+# 初始化日志
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
+
+def load_existing_data(file_path: str) -> Dict[str, Set[str]]:
+    """加载现有JSON文件并返回字典结构"""
+    result: Dict[str, Set[str]] = {}
+    if not os.path.exists(file_path):
+        return result
+    
+    try:
+        with open(file_path, "r", encoding=ENCODING) as f:
+            existing_data: List[Dict[str, str]] = json.load(f)
             for entry in existing_data:
-                pt_pin = entry['pt_pin']
-                uid = entry['Uid']
-                if pt_pin not in result_dict:
-                    result_dict[pt_pin] = set()
-                result_dict[pt_pin].add(uid)
+                if "pt_pin" in entry and "Uid" in entry:
+                    pt_pin = entry["pt_pin"]
+                    uid = entry["Uid"]
+                    result.setdefault(pt_pin, set()).add(uid)
+                else:
+                    logger.warning("忽略无效条目: %s", entry)
+    except (json.JSONDecodeError, IOError) as e:
+        logger.error("加载现有文件失败: %s", e)
+    
+    return result
 
-    # 2. 解析环境变量数据库
-    with open(input_db_path, 'r', encoding='utf-8') as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                data = json.loads(line)
-            except json.JSONDecodeError:
-                continue
+def parse_env_db(file_path: str) -> Dict[str, Set[str]]:
+    """解析环境变量数据库"""
+    result: Dict[str, Set[str]] = {}
+    
+    if not os.path.exists(file_path):
+        logger.error("输入文件不存在: %s", file_path)
+        return result
+    
+    try:
+        with open(file_path, "r", encoding=ENCODING) as f:
+            for line_num, line in enumerate(f, 1):
+                line = line.strip()
+                if not line:
+                    continue
+                
+                try:
+                    data: Dict[str, Any] = json.loads(line)
+                except json.JSONDecodeError:
+                    logger.warning("行 %d: JSON解析失败", line_num)
+                    continue
+                
+                if data.get("name") != JD_COOKIE_NAME:
+                    continue
+                
+                value = data.get("value", "")
+                remarks = data.get("remarks", "")
+                
+                # 提取pt_pin（支持URL解码）
+                pt_pin = None
+                if "pt_pin=" in value:
+                    pt_pin = value.split("pt_pin=")[1].split(";")[0].strip()
+                    # 可选: 如果需要URL解码
+                    # from urllib.parse import unquote
+                    # pt_pin = unquote(pt_pin)
+                
+                # 提取UID
+                uid = None
+                if remarks.startswith(UID_PREFIX):
+                    uid = remarks[len(UID_PREFIX):].strip()
+                
+                if pt_pin and uid:
+                    result.setdefault(pt_pin, set()).add(uid)
+                else:
+                    logger.debug("行 %d: 无效记录 value=%s remarks=%s", line_num, value, remarks)
+    
+    except IOError as e:
+        logger.error("读取环境数据库失败: %s", e)
+    
+    return result
 
-            # 仅处理 JD_COOKIE 记录
-            if data.get('name') != 'JD_COOKIE':
-                continue
+def save_output(data: Dict[str, Set[str]], output_path: str) -> bool:
+    """保存结果到文件"""
+    output_list: List[Dict[str, str]] = [
+        {"pt_pin": pin, "Uid": uid}
+        for pin, uids in data.items()
+        for uid in uids
+    ]
+    
+    # 检查文件是否需要更新
+    if os.path.exists(output_path):
+        try:
+            with open(output_path, "r", encoding=ENCODING) as f:
+                existing = json.load(f)
+                if existing == output_list:
+                    logger.info("内容未变化，无需更新")
+                    return False
+        except (IOError, json.JSONDecodeError) as e:
+            logger.warning("比较现有文件失败: %s", e)
+    
+    try:
+        with open(output_path, "w", encoding=ENCODING) as f:
+            json.dump(output_list, f, indent=4, ensure_ascii=False)
+            logger.info("成功写入 %d 条记录到 %s", len(output_list), output_path)
+            return True
+    except IOError as e:
+        logger.error("文件写入失败: %s", e)
+        return False
 
-            value = data.get('value', '')
-            remarks = data.get('remarks', '')
+def main():
+    # 合并数据
+    combined_data = load_existing_data(OUTPUT_FILE_PATH)
+    new_data = parse_env_db(INPUT_DB_PATH)
+    
+    # 合并新数据
+    for pt_pin, uids in new_data.items():
+        combined_data.setdefault(pt_pin, set()).update(uids)
+    
+    # 保存结果
+    save_output(combined_data, OUTPUT_FILE_PATH)
 
-            # 提取 pt_pin
-            if 'pt_pin=' in value:
-                pt_pin = value.split('pt_pin=')[1].split(';')[0].strip()
-            else:
-                continue  # 无 pt_pin 则跳过
-
-            # 提取 Uid
-            if remarks.startswith('UID_'):
-                uid = remarks[len('UID_'):].strip()
-            else:
-                continue  # 无 Uid 则跳过
-
-            # 更新结果字典
-            if pt_pin not in result_dict:
-                result_dict[pt_pin] = set()
-            result_dict[pt_pin].add(uid)
-
-    # 3. 转换为列表格式
-    output_list = []
-    for pt_pin, uids in result_dict.items():
-        for uid in uids:
-            output_list.append({
-                "pt_pin": pt_pin,
-                "Uid": uid
-            })
-
-    # 4. 写入文件（仅当内容变化时更新）
-    if os.path.exists(output_file_path):
-        with open(output_file_path, 'r', encoding='utf-8') as f:
-            existing_content = json.load(f)
-            if existing_content == output_list:
-                print("文件内容无变化，无需更新")
-                return
-
-    with open(output_file_path, 'w', encoding='utf-8') as f:
-        json.dump(output_list, f, indent=4, ensure_ascii=False)
-    print(f"成功更新文件：{output_file_path}，当前包含 {len(output_list)} 条记录")
-
-# 配置路径（根据实际情况修改）
-INPUT_DB = "/db/env.db"
-OUTPUT_FILE = "/scripts/CK_WxPusherUid.json"
-
-update_ck_file(INPUT_DB, OUTPUT_FILE)
+if __name__ == "__main__":
+    main()
