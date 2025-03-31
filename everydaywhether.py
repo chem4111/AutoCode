@@ -7,49 +7,86 @@
 # cron "30 7 * * *" script-path=xxx.py,tag=匹配cron用
 # const $ = new Env('天气推送')
 
-import requests, json ,os,notify
-
-# 城市code 自己城市的code https://fastly.jsdelivr.net/gh/Oreomeow/checkinpanel@master/city.json 这个网址查看
-# city_code = '101190404'
-
-# 青龙变量 city_code
-city_code = os.getenv("city_code")
+import requests
+import json
+import os
+import notify
 
 
-r = requests.get(
-    f"http://t.weather.itboy.net/api/weather/city/{city_code}"
-)
-d = json.loads(r.text)
-result2 = json.loads(r.text)['cityInfo']
-
-msg = (
-    f' 城市：{d["cityInfo"]["parent"]} {d["cityInfo"]["city"]}\n'
-    f' 日期：{d["data"]["forecast"][0]["ymd"]} {d["data"]["forecast"][0]["week"]}\n'
-    f' 天气：{d["data"]["forecast"][0]["type"]}\n'
-    f' 温度：{d["data"]["forecast"][0]["high"]} {d["data"]["forecast"][0]["low"]}\n'
-    f' 湿度：{d["data"]["shidu"]}\n'
-    f' 空气质量：{d["data"]["quality"]}\n'
-    f' PM2.5：{d["data"]["pm25"]}\n'
-    f' PM10：{d["data"]["pm10"]}\n'
-    f' 风力风向 {d["data"]["forecast"][0]["fx"]} {d["data"]["forecast"][0]["fl"]}\n'
-    f' 感冒指数：{d["data"]["ganmao"]}\n'
-    f' 温馨提示：{d["data"]["forecast"][0]["notice"]}\n'
-    f' 更新时间：{d["time"]}'
-)
+def get_city_code():
+    """
+    获取城市代码，优先从环境变量中获取
+    """
+    return os.getenv("city_code")
 
 
-w_list = []
-for i in range(7):
-    list = [
-        d['data']['forecast'][i]['ymd'],
-        d['data']['forecast'][i]['week'],
-        d['data']['forecast'][i]['type'],
-        d['data']['forecast'][i]['low'],
-        d['data']['forecast'][i]['high'],
-        d['data']['forecast'][i]['notice']
-    ]
-    w_list.append(list)
-seven_days_weather = str(w_list).replace('], [','\n').replace(', ','').replace('[','').replace(']','').replace('\'',' ')
-msg_total = (msg + '\n\n'+ seven_days_weather)
-print(msg_total)
-notify.send("保定天气", msg_total)
+def fetch_weather_data(city_code):
+    """
+    根据城市代码获取天气数据
+    """
+    try:
+        response = requests.get(f"http://t.weather.itboy.net/api/weather/city/{city_code}")
+        response.raise_for_status()
+        return response.json()
+    except requests.RequestException as e:
+        print(f"网络请求错误: {e}")
+    except json.JSONDecodeError as e:
+        print(f"JSON 解析错误: {e}")
+    return None
+
+
+def generate_weather_message(data):
+    """
+    生成当前天气信息的消息
+    """
+    if not data:
+        return ""
+    city_info = data["cityInfo"]
+    today_forecast = data["data"]["forecast"][0]
+    return (
+        f' 城市：{city_info["parent"]} {city_info["city"]}\n'
+        f' 日期：{today_forecast["ymd"]} {today_forecast["week"]}\n'
+        f' 天气：{today_forecast["type"]}\n'
+        f' 温度：{today_forecast["high"]} {today_forecast["low"]}\n'
+        f' 湿度：{data["data"]["shidu"]}\n'
+        f' 空气质量：{data["data"]["quality"]}\n'
+        f' PM2.5：{data["data"]["pm25"]}\n'
+        f' PM10：{data["data"]["pm10"]}\n'
+        f' 风力风向 {today_forecast["fx"]} {today_forecast["fl"]}\n'
+        f' 感冒指数：{data["data"]["ganmao"]}\n'
+        f' 温馨提示：{today_forecast["notice"]}\n'
+        f' 更新时间：{data["time"]}'
+    )
+
+
+def generate_seven_days_weather(data):
+    """
+    生成未来七天的天气信息
+    """
+    if not data:
+        return ""
+    weather_list = []
+    for forecast in data["data"]["forecast"]:
+        weather_list.append([
+            forecast["ymd"],
+            forecast["week"],
+            forecast["type"],
+            forecast["low"],
+            forecast["high"],
+            forecast["notice"]
+        ])
+    return str(weather_list).replace('], [', '\n').replace(', ', '').replace('[', '').replace(']', '').replace('\'', ' ')
+
+
+if __name__ == "__main__":
+    city_code = get_city_code()
+    if not city_code:
+        print("未获取到城市代码，请设置环境变量 city_code。")
+    else:
+        weather_data = fetch_weather_data(city_code)
+        current_weather_msg = generate_weather_message(weather_data)
+        seven_days_weather_msg = generate_seven_days_weather(weather_data)
+        total_msg = f"{current_weather_msg}\n\n{seven_days_weather_msg}"
+        print(total_msg)
+        notify.send("昆山天气", total_msg)
+    
