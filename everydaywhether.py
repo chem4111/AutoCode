@@ -3,7 +3,7 @@
 # -------------------------------
 # @Time : 2025/3/31 13:23
 # -------------------------------
-# cron "30 7 * * *" script-path=xxx.py,tag=匹配cron用
+# cron "30 7,10,18 * * *" script-path=xxx.py,tag=匹配cron用
 # const $ = new Env('天气推送')
 
 import requests
