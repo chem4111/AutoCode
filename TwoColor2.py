@@ -1,3 +1,12 @@
+#!/usr/bin/python3
+# -- coding: utf-8 --
+# -------------------------------
+# @Author : https://github.com/chem4111/AutoCode/
+# @Time : 2025/3/27 13:23
+# -------------------------------
+# cron "30 8 * * *" script-path=xxx.py,tag=匹配cron用
+# const $ = new Env('双色球游戏')
+
 import requests
 from collections import Counter
 from datetime import datetime
