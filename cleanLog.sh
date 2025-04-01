@@ -19,23 +19,12 @@ if [ ! -d "$LOG_DIR" ]; then
     exit 1
 fi
 
-# 查找要删除的日志文件
-LOG_FILES=$(find "$LOG_DIR" -name "*.log")
-
-if [ -z "$LOG_FILES" ]; then
-    echo "没有找到日志文件，无需清理。"
+# 直接删除日志文件
+if find "$LOG_DIR" -name "*.log" -exec rm -f {} +; then
+    echo "日志文件删除成功。"
 else
-    # 输出要删除的日志文件列表
-    echo "即将删除以下日志文件："
-    echo "$LOG_FILES"
-
-    # 删除日志文件
-    if find "$LOG_DIR" -name "*.log" -exec rm -rf {} \; ; then
-        echo "日志文件删除成功。"
-    else
-        echo "错误：删除日志文件时出现问题。"
-        exit 1
-    fi
+    echo "错误：删除日志文件时出现问题。"
+    exit 1
 fi
 
 echo "清理日志完成"    
