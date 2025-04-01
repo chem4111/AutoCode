@@ -8,7 +8,7 @@
 # const $ = new Env('青龙日志清理')
 
 # 定义日志目录
-LOG_DIR="/ql/log"
+LOG_DIR="../log"
 
 echo "开始清理日志"
 pwd
@@ -19,12 +19,21 @@ if [ ! -d "$LOG_DIR" ]; then
     exit 1
 fi
 
-# 直接删除日志文件
-if find "$LOG_DIR" -name "*.log" -exec rm -f {} +; then
+# 尝试更改文件权限
+chmod -R 777 "$LOG_DIR"
+
+# 查找所有文件并尝试删除
+if find "$LOG_DIR" -type f -exec rm -f {} +; then
     echo "日志文件删除成功。"
 else
     echo "错误：删除日志文件时出现问题。"
+    # 尝试找出占用文件的进程
+    lsof +D "$LOG_DIR"
     exit 1
 fi
 
-echo "清理日志完成"    
+# 删除空目录
+find "$LOG_DIR" -type d -empty -delete
+
+echo "清理日志完成"
+    
