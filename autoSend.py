@@ -11,7 +11,11 @@ import json
 import os
 import logging
 from typing import Dict, Set, List, Any
+
+
 #将环境变量的pin和uid自动组成json报文。uid填在对应pt_pin的备注里
+
+
 # 配置常量
 INPUT_DB_PATH = "/ql/db/env.db"
 OUTPUT_FILE_PATH = "/ql/scripts/CK_WxPusherUid.json"
