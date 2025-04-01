@@ -8,7 +8,7 @@
 # const $ = new Env('青龙日志清理')
 
 # 定义日志目录
-LOG_DIR="../log"
+LOG_DIR="/ql/log"
 
 echo "开始清理日志"
 pwd
