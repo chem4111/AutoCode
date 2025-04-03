@@ -4,11 +4,11 @@
 # @Author : https://github.com/chem4111/AutoCode/
 # @Time : 2025/4/1 13:23
 # -------------------------------
-# cron "0 0 * * 7" script-path=xxx.sh,tag=匹配cron用
+# cron "0 0 1 * *" script-path=xxx.sh,tag=匹配cron用
 # const $ = new Env('青龙日志清理')
 
 
-#每天 0：30 清空所有日志
+#每月1号 清空所有日志
 
 # 定义日志目录
 LOG_DIR="/ql/log"
