@@ -4,7 +4,7 @@
 # @Author : https://github.com/chem4111/AutoCode/
 # @Time : 2025/3/27 13:23
 # -------------------------------
-# cron "30 0 * * *" script-path=xxx.py,tag=匹配cron用
+# cron "30 * * * *" script-path=xxx.py,tag=匹配cron用
 # const $ = new Env('自动匹配推送json')
 
 import json
