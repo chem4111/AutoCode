@@ -11,7 +11,7 @@ import requests
 import os
 import sys  # 添加sys库用于退出程序
 
-string url = "https://ikuuu.one";
+url = "https://ikuuu.one"
 # export ikuuu='邮箱1&密码1&备注1#邮箱2&密码2&备注2#邮箱3&密码3&备注3'
 
 #你需要在环境变量中设置 PUSH_PLUS_TOKEN 和 PUSH_PLUS_USER。
