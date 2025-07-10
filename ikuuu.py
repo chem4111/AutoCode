@@ -11,6 +11,7 @@ import requests
 import os
 import sys  # 添加sys库用于退出程序
 
+string url = "https://ikuuu.one";
 # export ikuuu='邮箱1&密码1&备注1#邮箱2&密码2&备注2#邮箱3&密码3&备注3'
 
 #你需要在环境变量中设置 PUSH_PLUS_TOKEN 和 PUSH_PLUS_USER。
@@ -49,9 +50,9 @@ def sign_in(email, passwd):
         }
         session = requests.session()
         # 发送登录请求
-        session.post('https://ikuuu.de/auth/login', headers=headers, data=body)
+        session.post('url/auth/login', headers=headers, data=body)
         # 发送签到请求
-        response = session.post('https://ikuuu.de/user/checkin').json()
+        response = session.post('url/user/checkin').json()
         return response.get('msg', '签到失败')  # 返回签到结果
     except Exception as e:
         return f'请检查账号配置是否错误: {e}'  # 捕获异常并返回错误信息
