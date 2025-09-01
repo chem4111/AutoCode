@@ -11,8 +11,8 @@ import requests
 import os
 import sys  # 添加sys库用于退出程序
 
-login_url = 'https://ikuuu.one/auth/login'
-check_url = 'https://ikuuu.one/user/checkin'
+login_url = 'https://ikuuu.de/auth/login'
+check_url = 'https://ikuuu.de/user/checkin'
 # export ikuuu='邮箱1&密码1&备注1#邮箱2&密码2&备注2#邮箱3&密码3&备注3'
 
 #你需要在环境变量中设置 PUSH_PLUS_TOKEN 和 PUSH_PLUS_USER。
@@ -89,3 +89,4 @@ def send_notification(remark, message):
 
 if __name__ == '__main__':
     main()
+
