@@ -7,18 +7,20 @@ from git import Repo
 from requests.exceptions import RequestException
 from git.exc import GitCommandError
 
+#export GITHUB_PAT=ghp_xxxxxxxxxxxxxxxxxxxxxxxx
+
 QL_CONFIG = {
     "url": "http://127.0.0.1:5700",
     "client_id": "QYWVF1968Um_",
     "client_secret": "YmpfcuGoTUf3-8r7ywRh3kTz"
 }
 
+token = os.getenv("GITHUB_PAT")
 REPO_CONFIG = {
     "path": "./ql-env-backup",
-    "repo_url": "https://github.com/chem4111/ql-env-backup.git",
+    "repo_url": f"https://chem4111:{token}@github.com/chem4111/ql-env-backup.git",
     "file_name": "env_backup.json"
 }
-
 
 def get_ql_token():
     url = f"{QL_CONFIG['url']}/open/auth/token"
