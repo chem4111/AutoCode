@@ -2,19 +2,16 @@
 # -- coding: utf-8 --
 # -------------------------------
 # @Author : https://github.com/chem4111/AutoCode/
-# @Time : 2025/9/23 13:23
+# @Time   : 2025/9/23 13:23
 # -------------------------------
 # cron "30 8 * * *" script-path=xxx.py,tag=匹配cron用
 # const $ = new Env('青龙环境变量备份')
 
-# ql_backup.py
 import requests
 import json
 import os
 import time
-from git import Repo
-from requests.exceptions import RequestException
-from git.exc import GitCommandError
+import subprocess
 
 # 使用前先导出 GitHub PAT:
 # export GITHUB_PAT=ghp_xxxxxxxxxxxxxxxxxxxxxxxx
@@ -33,7 +30,8 @@ if not GITHUB_PAT:
 REPO_CONFIG = {
     "path": "./ql-env-backup",
     "repo_url": f"https://chem4111:{GITHUB_PAT}@github.com/chem4111/ql-env-backup.git",
-    "file_name": "env_backup.json"
+    "file_name": "env_backup.json",
+    "branch": "main"
 }
 
 
@@ -49,7 +47,7 @@ def get_ql_token():
         response.raise_for_status()
         data = response.json()["data"]
         return data["token"]
-    except RequestException as e:
+    except requests.RequestException as e:
         print(f"❌ 获取青龙令牌失败: {e}")
         return None
 
@@ -62,39 +60,72 @@ def get_ql_envs(ql_token):
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
         return response.json()["data"]
-    except RequestException as e:
+    except requests.RequestException as e:
         print(f"❌ 获取环境变量失败: {e}")
         return None
 
 
-def backup_envs_to_repo(envs):
-    """把环境变量备份到 GitHub 仓库"""
-    if not os.path.exists(REPO_CONFIG["path"]):
-        print("📥 首次运行，正在克隆仓库...")
-        Repo.clone_from(REPO_CONFIG["repo_url"], REPO_CONFIG["path"])
+def run_git(cmd_list, cwd=None):
+    """执行 git 命令，强制 HTTP/1.1"""
+    try:
+        subprocess.run(["git", "-c", "http.version=HTTP/1.1"] + cmd_list, cwd=cwd, check=True)
+        return True
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Git 命令失败: {' '.join(cmd_list)}\n  {e}")
+        return False
 
-    repo = Repo(REPO_CONFIG["path"])
-    file_path = os.path.join(REPO_CONFIG["path"], REPO_CONFIG["file_name"])
+
+def has_upstream(repo_path):
+    """检查当前分支是否有 upstream"""
+    result = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"],
+        cwd=repo_path,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE
+    )
+    return result.returncode == 0
+
+
+def backup_envs_to_repo(envs):
+    repo_path = REPO_CONFIG["path"]
+    repo_url = REPO_CONFIG["repo_url"]
+    file_name = REPO_CONFIG["file_name"]
+    branch = REPO_CONFIG["branch"]
+
+    # 首次 clone
+    if not os.path.exists(repo_path):
+        print("📥 首次运行，正在克隆仓库...")
+        if not run_git(["clone", "-b", branch, repo_url, repo_path]):
+            return
+
+    # 检查仓库状态
+    head_file = os.path.join(repo_path, ".git", "HEAD")
+    is_empty_repo = not os.path.exists(head_file)
+    if is_empty_repo:
+        print("⚠️ 仓库为空或没有有效分支，跳过 pull")
+    else:
+        # 切换本地到远程默认分支 main
+        run_git(["checkout", "-B", branch], cwd=repo_path)
+        # pull 并允许不同历史合并
+        run_git(["pull", "origin", branch, "--allow-unrelated-histories"], cwd=repo_path)
 
     # 写入 JSON 文件
+    file_path = os.path.join(repo_path, file_name)
     with open(file_path, "w", encoding="utf-8") as f:
         json.dump(envs, f, ensure_ascii=False, indent=2)
 
-    # 提交与推送
-    try:
-        if repo.is_dirty(untracked_files=True):
-            repo.git.add(file_path)
-            commit_msg = (
-                f"Backup envs at {time.strftime('%Y-%m-%d %H:%M:%S')} | "
-                f"共 {len(envs)} 条环境变量"
-            )
-            repo.git.commit("-m", commit_msg)
-            repo.remote(name="origin").push()
-            print(f"✅ 环境变量已备份到仓库，提交信息: {commit_msg}")
-        else:
-            print("ℹ️ 没有变化，跳过提交")
-    except GitCommandError as e:
-        print(f"❌ Git 操作失败: {e}")
+    # 提交
+    run_git(["add", file_name], cwd=repo_path)
+    commit_msg = f"Backup envs at {time.strftime('%Y-%m-%d %H:%M:%S')} | 共 {len(envs)} 条环境变量"
+    run_git(["commit", "-m", commit_msg], cwd=repo_path)
+
+    # 推送
+    if is_empty_repo or not has_upstream(repo_path):
+        run_git(["push", "--set-upstream", "origin", branch], cwd=repo_path)
+    else:
+        run_git(["push"], cwd=repo_path)
+
+    print(f"✅ 环境变量已备份到仓库，提交信息: {commit_msg}")
 
 
 if __name__ == "__main__":
