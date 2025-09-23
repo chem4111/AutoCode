@@ -9,8 +9,8 @@ from git.exc import GitCommandError
 
 QL_CONFIG = {
     "url": "http://127.0.0.1:5700",
-    "client_id": "你的client_id",
-    "client_secret": "你的client_secret"
+    "client_id": "QYWVF1968Um_",
+    "client_secret": "YmpfcuGoTUf3-8r7ywRh3kTz"
 }
 
 REPO_CONFIG = {
