@@ -15,7 +15,7 @@ QL_CONFIG = {
 
 REPO_CONFIG = {
     "path": "./ql-env-backup",
-    "repo_url": "https://github.com/yourname/ql-env-backup.git",
+    "repo_url": "https://github.com/chem4111/ql-env-backup.git",
     "file_name": "env_backup.json"
 }
 
