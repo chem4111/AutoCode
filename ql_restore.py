@@ -7,35 +7,34 @@
 # cron "35 8 * * *" script-path=xxx.py,tag=匹配cron用
 # const $ = new Env('青龙环境变量同步')
 
-
-
-# ql_restore.py
+# ql_restore_gitee.py
 import requests
 import json
 import os
 from git import Repo
 from requests.exceptions import RequestException
 
-# 使用前先导出 GitHub PAT:
-# export GITHUB_PAT=ghp_xxxxxxxxxxxxxxxxxxxxxxxx
+# 使用前先导出 Gitee Token 或者密码:
+# export GITEE_PAT=xxxxxxxxxxxxxxxxxxxx
 
+# ================== 配置区 ==================
 QL_CONFIG = {
-    "url": "http://127.0.0.1:5700",
-    "client_id": "QYWVF1968Um_",
+    "url": "http://127.0.0.1:5700",       # 青龙面板地址
+    "client_id": "QYWVF1968Um_",          # 替换为你自己的
     "client_secret": "YmpfcuGoTUf3-8r7ywRh3kTz"
 }
 
-# 读取 GitHub PAT
-GITHUB_PAT = os.getenv("GITHUB_PAT")
-if not GITHUB_PAT:
-    raise RuntimeError("❌ 未设置 GITHUB_PAT 环境变量，请先执行: export GITHUB_PAT=xxxx")
-
 REPO_CONFIG = {
     "path": "./ql-env-backup",
-    "repo_url": f"https://chem4111:{GITHUB_PAT}@github.com/chem4111/ql-env-backup.git",
-    "file_name": "env_backup.json"
+    "repo_url": "https://back-cat:7cf2cfaa02fe518146e02648bdd63736@gitee.com/back-cat/ql-env-backup.git",
+    "file_name": "env_backup.json",
+    "branch": "master"
 }
 
+# ================== 读取 Gitee PAT ==================
+GITEE_PAT = os.getenv("GITEE_PAT")
+if not GITEE_PAT:
+    raise RuntimeError("❌ 未设置 GITEE_PAT 环境变量，请先执行: export GITEE_PAT=xxxx")
 
 def get_ql_token():
     """获取青龙面板 API 令牌"""
@@ -53,16 +52,19 @@ def get_ql_token():
         print(f"❌ 获取青龙令牌失败: {e}")
         return None
 
-
 def load_envs_from_repo():
-    """从 GitHub 仓库获取最新的 env_backup.json"""
+    """从 Gitee 仓库获取最新的 env_backup.json"""
     if not os.path.exists(REPO_CONFIG["path"]):
         print("📥 本地没有仓库，正在克隆...")
-        Repo.clone_from(REPO_CONFIG["repo_url"], REPO_CONFIG["path"])
+        Repo.clone_from(
+            REPO_CONFIG["repo_url"], 
+            REPO_CONFIG["path"], 
+            branch=REPO_CONFIG.get("branch", "master")
+        )
 
     repo = Repo(REPO_CONFIG["path"])
     print("🔄 拉取仓库最新内容...")
-    repo.remote(name="origin").pull()
+    repo.remote(name="origin").pull(REPO_CONFIG.get("branch", "master"))
 
     file_path = os.path.join(REPO_CONFIG["path"], REPO_CONFIG["file_name"])
     if not os.path.exists(file_path):
@@ -72,9 +74,8 @@ def load_envs_from_repo():
     with open(file_path, "r", encoding="utf-8") as f:
         return json.load(f)
 
-
 def restore_envs_to_ql(ql_token, envs):
-    """把 GitHub 里的环境变量同步到青龙"""
+    """把 Gitee 仓库里的环境变量同步到青龙"""
     url = f"{QL_CONFIG['url']}/open/envs"
     headers = {"Authorization": f"Bearer {ql_token}", "Content-Type": "application/json"}
 
@@ -97,7 +98,6 @@ def restore_envs_to_ql(ql_token, envs):
             print(f"❌ 添加变量失败: {e}")
 
     print(f"✅ 恢复完成，共写入 {success}/{len(envs)} 条变量")
-
 
 if __name__ == "__main__":
     ql_token = get_ql_token()
