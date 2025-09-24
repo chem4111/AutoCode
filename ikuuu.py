@@ -2,45 +2,51 @@
 # -- coding: utf-8 --
 # -------------------------------
 # @Author : https://github.com/chem4111/AutoCode/
-# @Time : 2025/3/27 13:23
+# @Time : 2025/9/24 13:23
 # -------------------------------
 # cron "30 5 * * *" script-path=xxx.py,tag=匹配cron用
 # const $ = new Env('ikuuu签到')
+
 
 import requests
 import os
 import sys
 import time
 import random
-from urllib.parse import urlparse
+import re
 
-# 域名配置（支持多个域名）
+# 域名配置
 DOMAINS = ['https://ikuuu.de', 'https://ikuuu.one', 'https://ikuuu.boo']
-CURRENT_DOMAIN = DOMAINS[0]  # 默认使用第一个域名
 
 class IkuuuSign:
-    def __init__(self):
+    def __init__(self, domain):
+        self.domain = domain
         self.session = requests.Session()
-        self.session.headers.update({
+        self.default_headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             'Accept': 'application/json, text/plain, */*',
             'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
             'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-            'Origin': CURRENT_DOMAIN,
-            'Referer': f'{CURRENT_DOMAIN}/auth/login',
+            'Origin': domain,
+            'Referer': f'{domain}/auth/login',
             'X-Requested-With': 'XMLHttpRequest'
-        })
-        self.login_url = f'{CURRENT_DOMAIN}/auth/login'
-        self.user_url = f'{CURRENT_DOMAIN}/user'
-        self.checkin_url = f'{CURRENT_DOMAIN}/user/checkin'
-        self.max_retries = 7
+        }
+        self.session.headers.update(self.default_headers)
+        self.login_url = f'{domain}/auth/login'
+        self.user_url = f'{domain}/user'
+        self.checkin_url = f'{domain}/user/checkin'
+        self.max_retries = 3
         self.timeout = 10
+
+    def reset_session(self):
+        """重置 session 并恢复默认 headers"""
+        self.session = requests.Session()
+        self.session.headers.update(self.default_headers)
 
     def check_login_status(self):
         """检查登录状态"""
         try:
             response = self.session.get(self.user_url, timeout=self.timeout, allow_redirects=False)
-            # 如果重定向到登录页面，说明未登录
             if response.status_code == 302 or 'login' in response.url:
                 return False
             return True
@@ -54,17 +60,34 @@ class IkuuuSign:
             'email': email,
             'passwd': password
         }
-        
         try:
+            # 访问登录页获取初始 cookie
+            self.session.get(f'{self.domain}/auth/login', timeout=self.timeout)
+
             response = self.session.post(self.login_url, data=login_data, timeout=self.timeout)
+            print(f"登录响应状态码: {response.status_code}")
+
+            # 原始响应（可读中文）
+            raw_text = response.text.encode('utf-8').decode('unicode_escape', errors='ignore')
+            print(f"登录原始响应: {raw_text[:500]}...")  # 截取前500字符
+
             if response.status_code == 200:
-                result = response.json()
-                if result.get('ret') == 1:
-                    print("登录成功")
-                    return True
-                else:
-                    print(f"登录失败: {result.get('msg', '未知错误')}")
-                    return False
+                try:
+                    result = response.json()
+                    if result.get('ret') == 1:
+                        print("登录成功")
+                        return True
+                    else:
+                        print(f"登录失败: {result.get('msg', '未知错误')}")
+                        return False
+                except:
+                    # 非 JSON 响应，通过 URL 判断登录是否成功
+                    if 'user' in response.url or 'dashboard' in response.url:
+                        print("登录成功（通过 URL 判断）")
+                        return True
+                    else:
+                        print("登录失败：无法解析响应")
+                        return False
             else:
                 print(f"登录请求失败，状态码: {response.status_code}")
                 return False
@@ -72,139 +95,112 @@ class IkuuuSign:
             print(f"登录过程中发生错误: {e}")
             return False
 
-    def sign_in(self, email, password, remark=""):
-        """执行签到流程"""
-        print(f"\n开始处理账号: {remark or email}")
-        
-        # 首先检查是否已登录
-        if not self.check_login_status():
-            print("未登录，尝试登录...")
-            if not self.login(email, password):
-                return "登录失败，请检查账号密码"
-        
-        # 执行签到（带重试机制）
+    def sign_in(self):
+        """执行签到"""
         for retry in range(self.max_retries):
             try:
-                # 随机延迟1-5秒（模拟原脚本行为）
                 delay = 1 + random.random() * 4
                 time.sleep(delay)
-                
+
                 response = self.session.post(self.checkin_url, timeout=self.timeout)
-                
-                if response.status_code == 200:
+
+                # 尝试解析 JSON
+                try:
                     result = response.json()
                     msg = result.get('msg', '签到成功')
-                    print(f"签到结果: {msg}")
-                    return msg
-                else:
-                    print(f"签到请求失败，状态码: {response.status_code}，第{retry + 1}次重试")
-                    
-            except requests.exceptions.Timeout:
-                print(f"请求超时，第{retry + 1}次重试")
-            except requests.exceptions.RequestException as e:
-                print(f"网络错误: {e}，第{retry + 1}次重试")
-            except Exception as e:
-                print(f"未知错误: {e}，第{retry + 1}次重试")
-            
-            # 最后一次重试后仍然失败
-            if retry == self.max_retries - 1:
-                return "签到失败：超过最大重试次数"
-            
-            # 重试间隔
-            time.sleep(3)
-        
-        return "签到流程异常结束"
+                    ret = result.get('ret', 0)
+                    parsed_info = f"[ret={ret}] {msg}"
+                except Exception:
+                    parsed_info = "解析失败"
 
-    def try_different_domains(self, email, password, remark=""):
-        """尝试不同的域名"""
-        for domain in DOMAINS:
-            print(f"\n尝试域名: {domain}")
-            self.login_url = f'{domain}/auth/login'
-            self.user_url = f'{domain}/user'
-            self.checkin_url = f'{domain}/user/checkin'
-            self.session.headers.update({
-                'Origin': domain,
-                'Referer': f'{domain}/auth/login'
-            })
-            
-            result = self.sign_in(email, password, remark)
-            if "登录失败" not in result and "签到失败" not in result:
-                return result
-        
-        return "所有域名尝试均失败"
+                # 原始响应文本（可读中文）
+                raw_text = response.text.encode('utf-8').decode('unicode_escape', errors='ignore')
+
+                # 输出两部分
+                print(f"签到解析信息: {parsed_info}")
+                print(f"原始响应: {raw_text[:500]}")  # 截取前500字符，可调整
+
+                return parsed_info
+
+            except requests.exceptions.Timeout:
+                print(f"签到请求超时，第{retry + 1}次重试...")
+            except Exception as e:
+                print(f"签到过程中发生错误: {e}，第{retry + 1}次重试...")
+
+            if retry < self.max_retries - 1:
+                time.sleep(3)
+
+        return "签到失败：超过最大重试次数"
 
 def get_accounts():
-    """从环境变量中获取账号信息"""
+    """从环境变量中获取账号信息，返回 [(email, password, remark), ...]"""
     ikuuu = os.getenv("ikuuu")
-    if ikuuu:
-        return ikuuu.split('#')
-    else:
-        print("未找到ikuuu环境变量")
-        print("请在环境变量中设置ikuuu，格式：邮箱1&密码1&备注1#邮箱2&密码2&备注2")
+    if not ikuuu:
+        print("未找到 ikuuu 环境变量")
+        print("请在环境变量中设置 ikuuu，格式示例：邮箱1&密码1&备注1#邮箱2&密码2&备注2")
         sys.exit(1)
 
-def send_notification(remark, message):
-    """发送通知"""
-    try:
-        push_plus_token = os.getenv("PUSH_PLUS_TOKEN")
-        push_plus_user = os.getenv("PUSH_PLUS_USER")
-        
-        if not push_plus_token:
-            print("未设置PUSH_PLUS_TOKEN，跳过通知")
-            return
-        
-        url = "http://www.pushplus.plus/send"
-        data = {
-            "token": push_plus_token,
-            "title": f"iKuuu签到结果 - {remark}",
-            "content": f"账号: {remark}\n结果: {message}",
-            "template": "txt"
-        }
-        
-        if push_plus_user:
-            data["topic"] = push_plus_user
-            
-        response = requests.post(url, json=data, timeout=10)
-        if response.status_code == 200:
-            print("通知发送成功")
-        else:
-            print(f"通知发送失败: {response.status_code}")
-    except Exception as e:
-        print(f"发送通知时出错: {e}")
+    raw = ikuuu.strip().strip('"').strip("'")
+    # 用 #、换行、; 分割
+    entries = re.split(r'[#;\n]+', raw)
+
+    accounts = []
+    for entry in entries:
+        entry = entry.strip()
+        if not entry:
+            continue
+        parts = entry.split('&', 2)
+        if len(parts) < 2:
+            print(f"忽略无效账号条目: {entry}")
+            continue
+        email = parts[0].strip()
+        password = parts[1].strip()
+        remark = parts[2].strip() if len(parts) > 2 and parts[2].strip() else email
+        accounts.append((email, password, remark))
+    if not accounts:
+        print("未解析到有效账号，请检查 ikuuu 环境变量格式。")
+        sys.exit(1)
+    return accounts
 
 def main():
-    """主函数"""
     print("开始执行iKuuu签到脚本")
-    
     accounts = get_accounts()
     print(f"找到 {len(accounts)} 个账号")
-    
-    signer = IkuuuSign()
-    
-    for account in accounts:
-        parts = account.split('&')
-        if len(parts) >= 2:
-            email = parts[0].strip()
-            password = parts[1].strip()
-            remark = parts[2].strip() if len(parts) > 2 else email
-            
-            print(f"\n{'='*50}")
-            print(f"处理账号: {remark} ({email})")
-            print(f"{'='*50}")
-            
-            # 执行签到
-            result = signer.try_different_domains(email, password, remark)
-            
-            # 发送通知
-            send_notification(remark, result)
-            
-            # 清理会话状态，为下一个账号准备
-            signer.session = requests.Session()
-            signer.session.headers.update(signer.session.headers)
+
+    for i, (email, password, remark) in enumerate(accounts, 1):
+        print(f"\n{'='*60}")
+        print(f"账号 {i}: {remark}")
+        print(f"邮箱: {email}")
+        print(f"密码长度: {len(password)}")
+        print(f"{'='*60}")
+
+        for domain in DOMAINS:
+            print(f"\n尝试域名: {domain}")
+            signer = IkuuuSign(domain)
+            if not signer.check_login_status():
+                print("未登录，尝试登录...")
+                if signer.login(email, password):
+                    result = signer.sign_in()
+                    break
+                else:
+                    print(f"在域名 {domain} 上登录失败")
+            else:
+                print("已登录，直接签到")
+                result = signer.sign_in()
+                break
         else:
-            print(f"账号格式错误: {account}")
-    
-    print("\n所有账号处理完成")
+            result = "所有域名尝试均失败"
+            print(result)
+
+        print(f"\n账号 {i} 签到结果: {result}")
+        print(f"{'='*60}\n")
+
+        # 账号间延迟
+        if i < len(accounts):
+            delay = 5
+            print(f"等待 {delay} 秒后处理下一个账号...")
+            time.sleep(delay)
 
 if __name__ == '__main__':
     main()
+
