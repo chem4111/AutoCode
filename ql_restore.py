@@ -4,8 +4,10 @@
 # @Author : https://github.com/chem4111/AutoCode/
 # @Time : 2025/9/23 13:23
 # -------------------------------
-# ql_restore_gitee.py
+# cron "35 8 * * *" script-path=xxx.py,tag=匹配cron用
+# const $ = new Env('青龙环境变量同步')
 
+# ql_restore_gitee.py
 import requests
 import json
 import os
@@ -104,14 +106,14 @@ def load_envs_from_repo():
 
 
 def restore_envs_to_ql(ql_token, envs):
-    """更新或新增环境变量"""
+    """逐条写入环境变量"""
     url = f"{QL_CONFIG['url']}/open/envs"
     headers = {
         "Authorization": f"Bearer {ql_token}",
         "Content-Type": "application/json"
     }
 
-    # 获取当前变量
+    # 获取当前变量并清理
     try:
         print("📋 获取当前环境变量...")
         response = requests.get(url, headers=headers, timeout=10)
@@ -122,12 +124,21 @@ def restore_envs_to_ql(ql_token, envs):
         print(f"❌ 获取当前环境变量失败: {e}")
         return False
 
-    # 构建字典 {变量名: {id/_id, value, remarks}}
-    current_envs_dict = {
-        env["name"]: env for env in current_envs if "name" in env
-    }
+    if current_envs:
+        print("🧹 清理旧的环境变量...")
+        try:
+            env_ids = [env["id"] for env in current_envs if "id" in env]
+            if env_ids:
+                delete_url = f"{QL_CONFIG['url']}/open/envs"
+                response = requests.delete(delete_url, headers=headers, json=env_ids, timeout=10)
+                response.raise_for_status()
+                print("✅ 旧环境变量清理完成")
+        except Exception as e:
+            print(f"❌ 清理环境变量失败: {e}")
+            return False
 
-    print("📤 开始同步环境变量...")
+    # 逐条添加
+    print("📤 添加新的环境变量...")
     success_count = 0
     for env in envs:
         clean_env = {
@@ -135,33 +146,16 @@ def restore_envs_to_ql(ql_token, envs):
             "value": env.get("value"),
             "remarks": env.get("remarks", "")
         }
+        try:
+            response = requests.post(url, headers=headers, json=[clean_env], timeout=10)
+            response.raise_for_status()
+            success_count += 1
+            print(f"✅ 已添加 {success_count}/{len(envs)} 条变量: {clean_env['name']}")
+        except Exception as e:
+            print(f"❌ 添加失败: {clean_env} | 错误: {e}")
+            continue
 
-        if clean_env["name"] in current_envs_dict:
-            # 已存在 → 更新
-            env_info = current_envs_dict[clean_env["name"]]
-            env_id = env_info.get("id") or env_info.get("_id")
-            if not env_id:
-                print(f"⚠️ 跳过更新，未找到 id: {clean_env['name']}")
-                continue
-            try:
-                put_url = f"{url}/{env_id}"
-                response = requests.put(put_url, headers=headers, json=clean_env, timeout=10)
-                response.raise_for_status()
-                success_count += 1
-                print(f"🔄 已更新: {clean_env['name']}")
-            except Exception as e:
-                print(f"❌ 更新失败: {clean_env} | 错误: {e}")
-        else:
-            # 不存在 → 新增
-            try:
-                response = requests.post(url, headers=headers, json=[clean_env], timeout=10)
-                response.raise_for_status()
-                success_count += 1
-                print(f"➕ 已新增: {clean_env['name']}")
-            except Exception as e:
-                print(f"❌ 新增失败: {clean_env} | 错误: {e}")
-
-    print(f"🎉 同步完成！成功处理 {success_count}/{len(envs)} 条环境变量")
+    print(f"🎉 恢复完成！成功添加 {success_count}/{len(envs)} 条环境变量")
     return success_count > 0
 
 
@@ -180,7 +174,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     if restore_envs_to_ql(ql_token, envs):
-        print("✅ 环境变量同步成功！")
+        print("✅ 环境变量恢复成功！")
     else:
-        print("❌ 环境变量同步失败")
-        sys.exit(1)
+        print("❌ 环境变量恢复失败")
+        sys.exit(1) 这原本的不就能恢复？  用这个修改 报错部分   404的其他不要动
