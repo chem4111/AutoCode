@@ -4,7 +4,7 @@
 # @Author : 青龙日志清理（只保留7天）
 # @Time : 2025/9/23 13:23
 # -------------------------------
-# cron "0 0 * 1 *" script-path=xxx.py,tag=匹配cron用
+# cron "0 0 1 * *" script-path=xxx.py,tag=匹配cron用
 # const $ = new Env('青龙日志清理-保留7天')
 
 LOG_DIR="/ql/log"
