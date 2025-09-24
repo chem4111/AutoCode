@@ -2,180 +2,159 @@
 # -- coding: utf-8 --
 # -------------------------------
 # @Author : https://github.com/chem4111/AutoCode/
-# @Time : 2025/9/23 13:23
+# @Time   : 2025/9/24
 # -------------------------------
-# ql_restore_gitee.py
 
-import requests
-import json
 import os
-import sys
-from git import Repo
+import json
+import subprocess
+import requests
 
-# ================== 从环境变量获取配置 ==================
+# ================= 配置 =================
 QL_CONFIG = {
-    "url": os.getenv('QL_URL', 'http://127.0.0.1:5700'),
-    "client_id": os.getenv('QL_CLIENT_ID'),
-    "client_secret": os.getenv('QL_CLIENT_SECRET')
+    "url": os.getenv("QL_URL", "http://127.0.0.1:5700"),
+    "client_id": os.getenv("QL_CLIENT_ID", ""),
+    "client_secret": os.getenv("QL_CLIENT_SECRET", "")
 }
 
+# 仓库配置（已改为 gitee + master）
 REPO_CONFIG = {
-    "path": os.getenv('BACKUP_PATH', './ql-env-backup'),
-    "repo_url": os.getenv('GITEE_REPO_URL'),
-    "file_name": os.getenv('BACKUP_FILE_NAME', 'env_backup.json'),
-    "branch": os.getenv('GIT_BRANCH', 'master')
+    "path": os.getenv("QL_REPO_PATH", "/ql/data/repo/AutoCode"),
+    "branch": os.getenv("QL_REPO_BRANCH", "master"),
 }
-# =======================================================
+
+# 模式选择：
+# False = 清空重建（完全一致，最保险）
+# True  = 更新追加（存在则更新，不存在则新增）
+UPDATE_MODE = True
+# =======================================
 
 
-def check_config():
-    """检查必要的环境变量是否配置"""
-    required_envs = ['QL_CLIENT_ID', 'QL_CLIENT_SECRET', 'GITEE_REPO_URL']
-    missing_envs = [env for env in required_envs if not os.getenv(env)]
-    
-    if missing_envs:
-        print(f"❌ 缺少必要的环境变量: {', '.join(missing_envs)}")
-        return False
-    
-    print("✅ 环境变量配置检查通过")
-    return True
-
-
-def get_ql_token():
-    """获取青龙面板 API 令牌"""
+def get_token():
     url = f"{QL_CONFIG['url']}/open/auth/token"
     params = {
         "client_id": QL_CONFIG["client_id"],
         "client_secret": QL_CONFIG["client_secret"]
     }
-    try:
-        response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()
-        data = response.json().get("data", {})
-        token = data.get("token")
-        if not token:
-            print("❌ 获取青龙令牌失败: 响应中未找到token")
-            return None
-        print("✅ 成功获取青龙令牌")
-        return token
-    except Exception as e:
-        print(f"❌ 获取青龙令牌失败: {e}")
-        return None
+    response = requests.get(url, params=params, timeout=10)
+    response.raise_for_status()
+    data = response.json()
+    return data["data"]["token"]
+
+
+def git_pull_repo():
+    print("🔄 拉取仓库最新内容...")
+    if not os.path.exists(REPO_CONFIG["path"]):
+        raise FileNotFoundError(f"仓库路径不存在: {REPO_CONFIG['path']}")
+
+    subprocess.run(
+        ["git", "-C", REPO_CONFIG["path"], "pull", "origin", REPO_CONFIG["branch"]],
+        check=True
+    )
+    print("✅ 仓库更新成功")
 
 
 def load_envs_from_repo():
-    """从 Gitee 仓库获取最新的 env_backup.json"""
-    repo_path = REPO_CONFIG["path"]
-    repo_url = REPO_CONFIG["repo_url"]
-    file_name = REPO_CONFIG["file_name"]
-    branch = REPO_CONFIG["branch"]
-    
-    if not os.path.exists(repo_path):
-        print("📥 本地没有仓库，正在克隆...")
-        try:
-            Repo.clone_from(repo_url, repo_path, branch=branch)
-            print("✅ 仓库克隆成功")
-        except Exception as e:
-            print(f"❌ 克隆仓库失败: {e}")
-            return None
+    env_file = os.path.join(REPO_CONFIG["path"], "env.json")
+    if not os.path.exists(env_file):
+        raise FileNotFoundError(f"仓库里没有 env.json: {env_file}")
 
-    try:
-        repo = Repo(repo_path)
-        print("🔄 拉取仓库最新内容...")
-        origin = repo.remote(name="origin")
-        origin.pull(branch)
-        print("✅ 仓库更新成功")
-    except Exception as e:
-        print(f"⚠️ 拉取更新失败: {e}")
+    with open(env_file, "r", encoding="utf-8") as f:
+        envs = json.load(f)
 
-    file_path = os.path.join(repo_path, file_name)
-    if not os.path.exists(file_path):
-        print(f"❌ 仓库里没有找到 {file_name}")
-        return None
-
-    try:
-        with open(file_path, "r", encoding="utf-8") as f:
-            envs = json.load(f)
-        print(f"✅ 成功加载 {len(envs)} 条环境变量")
-        return envs
-    except Exception as e:
-        print(f"❌ 读取环境变量文件失败: {e}")
-        return None
+    print(f"✅ 成功加载 {len(envs)} 条环境变量")
+    return envs
 
 
-def restore_envs_to_ql(ql_token, envs):
-    """同步环境变量：存在则更新，不存在则新增"""
+def get_current_envs(token):
     url = f"{QL_CONFIG['url']}/open/envs"
-    headers = {
-        "Authorization": f"Bearer {ql_token}",
-        "Content-Type": "application/json"
-    }
+    headers = {"Authorization": f"Bearer {token}"}
+    response = requests.get(url, headers=headers, timeout=10)
+    response.raise_for_status()
+    data = response.json()
+    return data.get("data", [])
 
-    # 获取当前变量
-    try:
-        print("📋 获取当前环境变量...")
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
-        current_envs = response.json().get("data", [])
-        print(f"当前有 {len(current_envs)} 条环境变量")
-    except Exception as e:
-        print(f"❌ 获取当前环境变量失败: {e}")
-        return False
 
-    # 转成 dict 方便查找
-    current_envs_dict = {env["name"]: env for env in current_envs if "name" in env}
+def restore_envs_to_ql(token, envs):
+    headers = {"Authorization": f"Bearer {token}"}
+    current_envs = get_current_envs(token)
 
-    success_add, success_update = 0, 0
-    for env in envs:
-        clean_env = {
-            "name": env.get("name"),
-            "value": env.get("value"),
-            "remarks": env.get("remarks", "")
+    print(f"📋 获取当前环境变量... 共 {len(current_envs)} 条")
+
+    # 构建索引：name -> {value, id/_id}
+    current_envs_dict = {}
+    for env in current_envs:
+        env_id = env.get("id") or env.get("_id")
+        current_envs_dict[env["name"]] = {
+            "value": env["value"],
+            "id": env_id
         }
 
-        if clean_env["name"] in current_envs_dict:
-            # 已存在 → 更新
-            env_id = current_envs_dict[clean_env["name"]]["id"]
-            update_url = f"{url}/{env_id}"
-            try:
-                response = requests.put(update_url, headers=headers, json=clean_env, timeout=10)
-                response.raise_for_status()
-                success_update += 1
-                print(f"🔄 已更新变量: {clean_env['name']}")
-            except Exception as e:
-                print(f"❌ 更新失败: {clean_env} | 错误: {e}")
-                continue
-        else:
-            # 不存在 → 新增
-            try:
-                response = requests.post(url, headers=headers, json=[clean_env], timeout=10)
-                response.raise_for_status()
-                success_add += 1
-                print(f"➕ 已新增变量: {clean_env['name']}")
-            except Exception as e:
-                print(f"❌ 新增失败: {clean_env} | 错误: {e}")
-                continue
+    if not UPDATE_MODE:
+        # 🔥 清空重建模式
+        print("🧹 清理旧的环境变量...")
+        env_ids = [env.get("id") or env.get("_id") for env in current_envs if (env.get("id") or env.get("_id"))]
+        if env_ids:
+            delete_url = f"{QL_CONFIG['url']}/open/envs"
+            response = requests.delete(delete_url, headers=headers, json=env_ids, timeout=10)
+            response.raise_for_status()
+        print("✅ 旧环境变量清理完成")
 
-    print(f"🎉 同步完成！新增 {success_add} 个，更新 {success_update} 个，总共 {len(envs)} 条")
-    return (success_add + success_update) > 0
+        # 添加新变量
+        add_url = f"{QL_CONFIG['url']}/open/envs"
+        response = requests.post(add_url, headers=headers, json=envs, timeout=10)
+        response.raise_for_status()
+        print(f"✅ 成功恢复 {len(envs)} 条环境变量")
+        return True
+
+    else:
+        # 🟢 更新追加模式
+        add_list = []
+        update_count = 0
+        for env in envs:
+            name = env["name"]
+            value = env["value"]
+
+            if name in current_envs_dict and current_envs_dict[name]["id"]:
+                # 已存在 → 更新
+                env_id = current_envs_dict[name]["id"]
+                put_url = f"{QL_CONFIG['url']}/open/envs"
+                response = requests.put(put_url, headers=headers, json=[{
+                    "name": name,
+                    "value": value,
+                    "id": env_id
+                }], timeout=10)
+                response.raise_for_status()
+                update_count += 1
+            else:
+                # 不存在 → 新增
+                add_list.append(env)
+
+        if add_list:
+            add_url = f"{QL_CONFIG['url']}/open/envs"
+            response = requests.post(add_url, headers=headers, json=add_list, timeout=10)
+            response.raise_for_status()
+
+        print(f"✅ 更新 {update_count} 条，新增 {len(add_list)} 条")
+        return True
 
 
 if __name__ == "__main__":
     print("🚀 开始从 Gitee 恢复青龙环境变量...")
-    
-    if not check_config():
-        sys.exit(1)
 
-    ql_token = get_ql_token()
-    if not ql_token:
-        sys.exit(1)
+    # Step 1: 检查配置
+    if not all([QL_CONFIG["url"], QL_CONFIG["client_id"], QL_CONFIG["client_secret"]]):
+        raise SystemExit("❌ 请先配置 QL_URL / QL_CLIENT_ID / QL_CLIENT_SECRET")
 
+    # Step 2: 获取 token
+    ql_token = get_token()
+    print("✅ 成功获取青龙令牌")
+
+    # Step 3: 更新仓库
+    git_pull_repo()
+
+    # Step 4: 加载仓库 env.json
     envs = load_envs_from_repo()
-    if not envs:
-        sys.exit(1)
 
-    if restore_envs_to_ql(ql_token, envs):
-        print("✅ 环境变量同步完成！")
-    else:
-        print("❌ 环境变量同步失败")
-        sys.exit(1)
+    # Step 5: 恢复/更新变量
+    restore_envs_to_ql(ql_token, envs)
