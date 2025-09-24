@@ -1,28 +1,44 @@
-# @author Sten
-# 作者仓库:https://github.com/aefa6/QinglongScript.git
-# 觉得不错麻烦点个star谢谢
+#!/usr/bin/env python3
+# -- coding: utf-8 --
+# -------------------------------
+# @Author : https://github.com/chem4111/AutoCode/
+# @Time : 2025/4/1 13:23
+# -------------------------------
+# cron "0 9 * * *" script-path=xxx.py,tag=匹配cron用
+# const $ = new Env('下个节假日')
 
 import requests
-import json
 import notify
 
-title = "下个节假日" 
+title = "下个节假日"
 
-dateurl = 'https://date.appworlds.cn/next'
-date1url = 'https://date.appworlds.cn/next/days'
-holiday = requests.get(dateurl)
-holiday1 = requests.get(date1url)
+DATE_URL = "https://date.appworlds.cn/next"
+DAYS_URL = "https://date.appworlds.cn/next/days"
 
-desc = json.loads(holiday.text)
-desc1 = json.loads(holiday1.text)
+def get_json(url):
+    try:
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        return resp.json()
+    except Exception as e:
+        print(f"❌ 请求失败: {url} | 错误: {e}")
+        return None
 
-daytime = desc['data']['date']
-dayname = desc['data']['name']
-Remain = desc1['data']
+def main():
+    holiday = get_json(DATE_URL)
+    holiday_days = get_json(DAYS_URL)
 
-info = f"""
-下个节假日是{Remain}天后的{dayname}（{daytime}）
-"""
-print(info)
-notify.send(title, info)
+    if not holiday or not holiday_days:
+        notify.send(title, "获取节假日信息失败 ❌")
+        return
 
+    daytime = holiday.get("data", {}).get("date", "未知日期")
+    dayname = holiday.get("data", {}).get("name", "未知节日")
+    remain = holiday_days.get("data", "未知天数")
+
+    info = f"下个节假日是 {remain} 天后的 {dayname}（{daytime}）"
+    print(info)
+    notify.send(title, info)
+
+if __name__ == "__main__":
+    main()
