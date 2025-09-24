@@ -127,7 +127,7 @@ def restore_envs_to_ql(ql_token, envs):
     if current_envs:
         print("🧹 清理旧的环境变量...")
         try:
-            env_ids = [env["id"] for env in current_envs if "id" in env]
+            env_ids = [env["_id"] for env in current_envs if "_id" in env]
             if env_ids:
                 delete_url = f"{QL_CONFIG['url']}/open/envs"
                 response = requests.delete(delete_url, headers=headers, json=env_ids, timeout=10)
