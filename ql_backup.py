@@ -2,8 +2,9 @@
 # -- coding: utf-8 --
 # -------------------------------
 # @Author : https://gitee.com/chem4111/AutoCode/
-# @Time   : 2025/9/23
+# @Time : 2025/9/23 13:23
 # -------------------------------
+# cron "0 8 * * *" script-path=xxx.py,tag=匹配cron用
 # 功能：备份青龙环境变量到 Gitee
 # 执行：可直接在青龙定时任务里运行
 
