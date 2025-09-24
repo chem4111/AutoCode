@@ -4,7 +4,7 @@
 # @Author : https://github.com/chem4111/AutoCode/
 # @Time : 2025/9/24 13:23
 # -------------------------------
-# cron "0 0 1 * *" script-path=xxx.sh,tag=匹配cron用
+# cron "0 12 * * *" script-path=xxx.sh,tag=匹配cron用
 # const $ = new Env('青龙日志清理改进版')
 
 LOG_DIR="/ql/log"
