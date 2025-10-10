@@ -17,8 +17,13 @@ title = "下个节假日"
 CACHE_FILE = "/ql/data/scripts/chem4111_AutoCode/last_holiday.json"
 
 def get_json(url):
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/122.0 Safari/537.36"
+    }
     try:
-        r = requests.get(url, timeout=10)
+        r = requests.get(url, headers=headers, timeout=10)
         r.raise_for_status()
         return r.json()
     except Exception as e:
