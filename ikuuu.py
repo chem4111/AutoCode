@@ -17,7 +17,8 @@ import re
 import notify
 
 
-title = ikuuu签到
+title = "ikuuu签到"
+
 # 域名配置
 DOMAINS = ['https://ikuuu.de', 'https://ikuuu.one', 'https://ikuuu.boo']
 
@@ -190,7 +191,6 @@ def main():
             else:
                 print("已登录，直接签到")
                 result = signer.sign_in()
-                notify.send(title, result)
                 break
         else:
             result = "所有域名尝试均失败"
@@ -198,6 +198,7 @@ def main():
 
         print(f"\n账号 {i} 签到结果: {result}")
         print(f"{'='*60}\n")
+        notify.send(f"{title} - {remark}", f"{email}\n{result}")
 
         # 账号间延迟
         if i < len(accounts):
@@ -207,5 +208,6 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
 
