@@ -20,7 +20,7 @@ import notify
 title = "ikuuu签到"
 
 # 域名配置
-DOMAINS = ['https://ikuuu.de', 'https://ikuuu.one', 'https://ikuuu.boo']
+DOMAINS = ['https://ikuuu.de', 'https://ikuuu.nl', 'https://ikuuu.fyi']
 
 class IkuuuSign:
     def __init__(self, domain):
@@ -208,6 +208,7 @@ def main():
 
 if __name__ == '__main__':
     main()
+
 
 
 
